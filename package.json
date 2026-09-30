@@ -1,0 +1,42 @@
+{
+  "name": "motion-codevideo",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "voice": ".venv/bin/python audio/tts.py",
+    "music": ".venv/bin/python audio/music.py",
+    "embed": "node scripts/embed-source.mjs",
+    "studio": "npm run embed && remotion studio src/index.ts",
+    "still": "remotion still src/index.ts Opus55Reel",
+    "render": "npm run embed && remotion render src/index.ts Opus55Reel out/opus55.mp4 --codec h264 --crf 16 --audio-codec aac --audio-bitrate 320k",
+    "web": "npm run embed && vite",
+    "web:build": "npm run embed && vite build"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@react-three/drei": "^9.122.0",
+    "@react-three/fiber": "^8.18.0",
+    "@react-three/postprocessing": "^2.19.1",
+    "@remotion/cli": "^4.0.530",
+    "@remotion/google-fonts": "^4.0.530",
+    "@remotion/media-utils": "^4.0.530",
+    "@remotion/three": "^4.0.530",
+    "postprocessing": "^6.39.5",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "remotion": "^4.0.530",
+    "three": "^0.169.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@types/three": "^0.186.0",
+    "@vitejs/plugin-react": "^4.7.0",
+    "typescript": "^7.0.2",
+    "vite": "^6.4.3"
+  }
+}

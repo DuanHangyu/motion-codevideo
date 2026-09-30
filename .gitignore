@@ -1,0 +1,16 @@
+# Dependencies and local Python environment
+node_modules/
+.venv/
+
+# Generated render/build output
+out/
+
+# Local tooling and operating-system files
+.claude/
+.DS_Store
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
