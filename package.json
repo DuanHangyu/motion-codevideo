@@ -11,7 +11,16 @@
     "still": "remotion still src/index.ts Opus55Reel",
     "render": "npm run embed && remotion render src/index.ts Opus55Reel out/opus55.mp4 --codec h264 --crf 16 --audio-codec aac --audio-bitrate 320k",
     "web": "npm run embed && vite",
-    "web:build": "npm run embed && vite build"
+    "web:build": "npm run embed && vite build",
+    "alexnet:data": ".venv/bin/python ml/extract.py",
+    "alexnet:voice": ".venv/bin/python audio/alexnet/tts.py",
+    "alexnet:score": ".venv/bin/python audio/alexnet/score.py",
+    "alexnet:studio": "remotion studio src/alexnet/index.ts",
+    "alexnet:stills": "node scripts/alexnet-stills.mjs",
+    "alexnet:render": "remotion render src/alexnet/index.ts AlexNet out/alexnet-video.mp4 --muted --codec h264 --crf 18 --concurrency 6 --gl angle && ffmpeg -y -i out/alexnet-video.mp4 -i public/alexnet/mix.wav -map 0:v -map 1:a -c:v copy -c:a aac -b:a 256k -shortest -movflags +faststart out/alexnet.mp4",
+    "classroom": "vite --config classroom.vite.config.mts",
+    "classroom:build": "vite build --config classroom.vite.config.mts",
+    "classroom:test": "vitest run --config classroom.vite.config.mts"
   },
   "keywords": [],
   "author": "",
@@ -37,6 +46,7 @@
     "@types/three": "^0.186.0",
     "@vitejs/plugin-react": "^4.7.0",
     "typescript": "^7.0.2",
-    "vite": "^6.4.3"
+    "vite": "^6.4.3",
+    "vitest": "^3.2.7"
   }
 }

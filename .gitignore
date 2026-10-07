@@ -5,6 +5,13 @@ node_modules/
 # Generated render/build output
 out/
 
+# AlexNet lossless mix exceeds GitHub's file-size limit; regenerate with alexnet:score
+public/alexnet/mix.wav
+
+# Python generated caches
+__pycache__/
+*.py[cod]
+
 # Local tooling and operating-system files
 .claude/
 .DS_Store
