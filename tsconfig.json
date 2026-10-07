@@ -12,10 +12,8 @@
   },
   "include": [
     "src",
-    "web",
-    "remotion.config.ts",
-    "vite.config.mts",
     "classroom",
+    "remotion.config.ts",
     "classroom.vite.config.mts"
   ]
 }
