@@ -2,8 +2,6 @@
 
 面向深度学习初学者的中文互动教学平台：知识地图、AlexNet 课程动画、暂停探索、测验与本地学习进度。基于 React、Remotion 和 Three.js，可在浏览器运行，也可渲染为 MP4。
 
-OPUS 5.5 宣传短片已独立迁移到 [opus55-codevideo](https://github.com/DuanHangyu/opus55-codevideo)。
-
 ## 快速开始
 
 ```bash
