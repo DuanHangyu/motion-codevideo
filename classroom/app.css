@@ -436,7 +436,254 @@ kbd {
 .node-label.selected .t {
   color: var(--cyan);
 }
+.map-stats div b small {
+  font-size: 16px;
+  color: var(--faint);
+  margin-left: 2px;
+}
+.crumb-link {
+  background: none;
+  border: 0;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.crumb-link:hover {
+  color: var(--ivory);
+}
+.map .topbar kbd {
+  margin-left: 6px;
+}
+
+/* galaxy: stars and planets */
+.star-label {
+  transform: translate(0, 46px);
+  text-align: center;
+  white-space: nowrap;
+  transition: transform 0.4s var(--ease-out);
+}
+.star-label .t {
+  font-family: var(--font-title);
+  font-weight: 600;
+  font-size: 15px;
+  letter-spacing: 0.06em;
+  color: rgba(236, 241, 248, 0.82);
+  text-shadow: 0 0 18px #000, 0 0 4px #000;
+}
+.star-label.open .t {
+  font-size: 18px;
+  color: var(--ivory);
+}
+.star-label.core {
+  transform: translate(0, 62px);
+}
+.star-label.core .t {
+  font-size: 24px;
+  letter-spacing: 0.08em;
+  text-shadow: 0 0 30px rgba(255, 207, 146, 0.6), 0 0 6px #000;
+}
+.star-label .e {
+  margin-top: 3px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.3em;
+  color: var(--track);
+  opacity: 0.8;
+}
+.star-label .e b {
+  color: var(--amber);
+  font-weight: 500;
+  letter-spacing: 0.15em;
+}
+.star-label .s {
+  width: 230px;
+  margin: 8px auto 0;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--dim);
+  white-space: normal;
+  opacity: 0;
+  transform: translateY(-4px);
+  transition: opacity 0.35s, transform 0.35s var(--ease-out);
+}
+.star-label.hover .s {
+  opacity: 1;
+  transform: none;
+}
+.planet-label {
+  transform: translateY(26px);
+  text-align: center;
+  white-space: nowrap;
+}
+.planet-label .t {
+  font-family: var(--font-title);
+  font-size: 14px;
+  letter-spacing: 0.06em;
+  color: var(--ivory);
+  text-shadow: 0 0 12px #000, 0 0 3px #000;
+}
+.planet-label .e {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.2em;
+  color: var(--dim);
+}
+.planet-label.locked .t {
+  color: #8f9bb9;
+}
+.planet-label.selected .t {
+  color: var(--cyan);
+}
+
+/* the opening title: quiet type over the galaxy */
+.map .map-title h1 {
+  font-weight: 400;
+  font-size: 52px;
+  letter-spacing: 0.2em;
+  margin: 14px 0 14px;
+}
+.map .map-title .mono {
+  letter-spacing: 0.5em;
+  font-size: 11px;
+  color: var(--faint);
+}
+.map .map-title p {
+  font-size: 14px;
+  line-height: 1.9;
+  max-width: 380px;
+}
+.map .map-stats {
+  gap: 30px;
+  margin-top: 30px;
+  padding-top: 22px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+.map .map-stats div b {
+  font-weight: 300;
+  font-size: 28px;
+}
+.map-title .arms {
+  margin-top: 34px;
+  display: grid;
+  gap: 10px;
+  font-size: 13px;
+  color: var(--dim);
+}
+.map-title .arms div {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.map-title .arms i {
+  width: 28px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--track));
+  box-shadow: 0 0 8px var(--track);
+}
+.map-title .arms span {
+  width: 92px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.3em;
+  color: var(--track);
+}
+.legend-dot {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--dim);
+}
+.legend-dot::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--c);
+  box-shadow: 0 0 8px var(--c);
+}
+.map .legend {
+  z-index: 20;
+}
+.map .legend .hint {
+  margin-left: 0;
+  letter-spacing: 0.08em;
+}
+.map .topbar {
+  background: linear-gradient(180deg, rgba(2, 3, 9, 0.7), transparent);
+}
+
+/* the card of an opened big node */
+.chapter-card {
+  border-top: 2px solid var(--track);
+}
+.chapter-card .needs button {
+  font-size: 12px;
+  padding: 3px 10px;
+  border-radius: 6px;
+  border: 0;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--dim);
+  cursor: pointer;
+}
+.chapter-card .needs button:hover {
+  color: var(--ivory);
+  background: rgba(255, 255, 255, 0.1);
+}
+.topic-list {
+  list-style: none;
+  margin: 6px 0 20px;
+  padding: 0;
+  max-height: 330px;
+  overflow-y: auto;
+  counter-reset: topic;
+}
+.topic-list button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 7px 8px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--ivory);
+  font: inherit;
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.topic-list button::before {
+  counter-increment: topic;
+  content: counter(topic, decimal-leading-zero);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--faint);
+  width: 18px;
+}
+.topic-list button:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+.topic-list button.locked {
+  color: var(--dim);
+}
+.topic-list i {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  border: 1.5px solid transparent;
+  flex: none;
+}
+.topic-list em {
+  margin-left: auto;
+  font-style: normal;
+  font-size: 11px;
+  color: var(--amber);
+}
 .node-card {
+  z-index: 20;
   position: absolute;
   right: 32px;
   top: 96px;

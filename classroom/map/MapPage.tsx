@@ -1,149 +1,45 @@
-import { useMemo, useRef, useState } from "react";
-import * as THREE from "three";
-import { Canvas, useFrame } from "@react-three/fiber";
-import { Html, OrbitControls } from "@react-three/drei";
+import { useEffect, useState } from "react";
+import { Canvas } from "@react-three/fiber";
 import { Bloom, EffectComposer } from "@react-three/postprocessing";
-import { go } from "../router";
-import { Starfield } from "../Starfield";
+import { go, useRoute } from "../router";
 import { useProgress } from "../progress/store";
 import { Progress, STATUS_LABEL, Status, get, status } from "../progress/mastery";
-import { KnowledgeNode, LEARNABLE, NODES, TOPIC, nodeById } from "./graph";
+import { KnowledgeNode, LEARNABLE, TOPIC } from "./graph";
+import { CHAPTERS, Chapter, OPEN_CHAPTERS, SUBNODE_COUNT, TRACKS, chapterById } from "./universe";
+import { STATUS_COLOR, Universe3D, nodeStatus } from "./Universe3D";
 
-export const STATUS_COLOR: Record<Status, string> = { new: "#7d8db3", learning: "#3ce0ff", review: "#ff5470", mastered: "#a8ff60" };
-const LOCKED = "#2a3350";
-const CENTER = new THREE.Vector3(6, 3.2, 0);
+export { STATUS_COLOR };
 
-const nodeStatus = (p: Progress, n: KnowledgeNode): Status | "locked" => (n.span ? status(get(p, n.id)) : "locked");
+/** Inside a chapter: its first learnable sub-node that is not mastered yet. */
+const recommendNode = (p: Progress, c: Chapter) => c.children.find((n) => n.span && status(get(p, n.id)) !== "mastered") ?? null;
+/** In the universe: the first open chapter with work left; once all are done, the first chapter whose prerequisites are open. */
+const recommendChapter = (p: Progress) =>
+  OPEN_CHAPTERS.find((c) => recommendNode(p, c)) ?? CHAPTERS.find((c) => !c.lesson && c.needs.every((id) => chapterById(id)?.lesson)) ?? CHAPTERS[0];
 
-/** First learnable node that is not mastered yet; once all are mastered, the first locked node the student is now ready for. */
-const recommend = (p: Progress) =>
-  LEARNABLE.find((n) => status(get(p, n.id)) !== "mastered") ?? NODES.find((n) => !n.span && n.needs.every((id) => nodeById(id).span)) ?? LEARNABLE[0];
+const titleOf = (c: Chapter, id: string) => c.children.find((n) => n.id === id)?.title ?? id;
 
-/* ── 3D pieces ─────────────────────────────────────────────────────────── */
-const Edges = ({ progress }: { progress: Progress }) => {
-  const pulses = useRef<THREE.Points>(null);
-  const pairs = useMemo(() => NODES.flatMap((n) => n.needs.map((id) => [nodeById(id), n] as const)), []);
-  const lines = useMemo(() => {
-    const g = new THREE.BufferGeometry();
-    g.setAttribute("position", new THREE.BufferAttribute(new Float32Array(pairs.flatMap(([a, b]) => [...a.pos, ...b.pos])), 3));
-    g.setAttribute("color", new THREE.BufferAttribute(new Float32Array(pairs.length * 6), 3));
-    return g;
-  }, [pairs]);
-  const pulseGeo = useMemo(() => {
-    const g = new THREE.BufferGeometry();
-    g.setAttribute("position", new THREE.BufferAttribute(new Float32Array(pairs.length * 3), 3));
-    return g;
-  }, [pairs]);
-
-  const col = lines.getAttribute("color") as THREE.BufferAttribute;
-  const c = new THREE.Color();
-  pairs.forEach(([a, b], k) => {
-    const live = a.span && b.span;
-    const done = live && status(get(progress, a.id)) === "mastered";
-    c.set(done ? "#a8ff60" : live ? "#3ce0ff" : LOCKED).multiplyScalar(live ? 0.55 : 0.8);
-    col.setXYZ(k * 2, c.r, c.g, c.b);
-    col.setXYZ(k * 2 + 1, c.r, c.g, c.b);
-  });
-  col.needsUpdate = true;
-
-  // a spark travels along every learnable edge, from prerequisite to dependant
-  useFrame(({ clock }) => {
-    const pos = pulseGeo.getAttribute("position") as THREE.BufferAttribute;
-    pairs.forEach(([a, b], k) => {
-      const u = (clock.elapsedTime * 0.35 + k * 0.137) % 1;
-      if (!(a.span && b.span)) return pos.setXYZ(k, 0, 0, -999);
-      pos.setXYZ(k, a.pos[0] + (b.pos[0] - a.pos[0]) * u, a.pos[1] + (b.pos[1] - a.pos[1]) * u, a.pos[2] + (b.pos[2] - a.pos[2]) * u);
-    });
-    pos.needsUpdate = true;
-  });
-
-  return (
-    <>
-      <lineSegments geometry={lines}>
-        <lineBasicMaterial vertexColors transparent opacity={0.9} toneMapped={false} />
-      </lineSegments>
-      <points ref={pulses} geometry={pulseGeo} frustumCulled={false}>
-        <pointsMaterial size={0.22} color="#ecf1f8" transparent opacity={0.9} toneMapped={false} depthWrite={false} />
-      </points>
-    </>
-  );
-};
-
-const Node = ({ node, st, selected, recommended, index, onPick }: { node: KnowledgeNode; st: Status | "locked"; selected: boolean; recommended: boolean; index: number; onPick: () => void }) => {
-  const group = useRef<THREE.Group>(null);
-  const ring = useRef<THREE.Mesh>(null);
-  const [hover, setHover] = useState(false);
-  const locked = st === "locked";
-  const color = locked ? LOCKED : STATUS_COLOR[st];
-
-  useFrame(({ clock }) => {
-    const t = clock.elapsedTime;
-    const g = group.current;
-    if (!g) return;
-    // staggered entrance: the map "grows" left to right
-    const k = Math.min(1, Math.max(0, (t - 0.2 - index * 0.09) / 0.6));
-    const e = 1 - (1 - k) ** 3;
-    const s = e * (hover || selected ? 1.25 : 1);
-    g.scale.setScalar(Math.max(0.001, s));
-    g.position.set(node.pos[0], node.pos[1] + Math.sin(t * 0.8 + index) * 0.12, node.pos[2]);
-    if (ring.current) ring.current.rotation.z = t * 0.8;
-  });
-
-  return (
-    <group ref={group}>
-      <mesh
-        onClick={(e) => {
-          e.stopPropagation();
-          onPick();
-        }}
-        onPointerOver={(e) => {
-          e.stopPropagation();
-          setHover(true);
-          document.body.style.cursor = "pointer";
-        }}
-        onPointerOut={() => {
-          setHover(false);
-          document.body.style.cursor = "";
-        }}
-      >
-        <sphereGeometry args={[locked ? 0.42 : 0.6, 32, 16]} />
-        {locked ? <meshBasicMaterial color={color} wireframe /> : <meshBasicMaterial color={st === "new" ? "#56658a" : color} toneMapped={false} />}
-      </mesh>
-      {!locked && (
-        <mesh scale={1.45}>
-          <sphereGeometry args={[0.6, 24, 12]} />
-          <meshBasicMaterial color={color} transparent opacity={st === "new" ? 0.03 : 0.07} depthWrite={false} />
-        </mesh>
-      )}
-      {(selected || recommended) && (
-        <mesh ref={ring}>
-          <torusGeometry args={[1.15, 0.035, 8, 64, Math.PI * 1.6]} />
-          <meshBasicMaterial color={selected ? "#ecf1f8" : "#ffb547"} toneMapped={false} />
-        </mesh>
-      )}
-      <Html center zIndexRange={[5, 0]} style={{ pointerEvents: "none" }}>
-        <div className={`node-label${locked ? " locked" : ""}${selected ? " selected" : ""}`}>
-          <div className="t">{node.title}</div>
-          <div className="e">{recommended && !selected ? "▲ 推荐下一步" : node.en}</div>
-        </div>
-      </Html>
-    </group>
-  );
-};
-
-/* ── page ─────────────────────────────────────────────────────────────── */
-const NodeCard = ({ node, progress, onClose }: { node: KnowledgeNode; progress: Progress; onClose: () => void }) => {
+/* ── cards ───────────────────────────────────────────────────────────── */
+const NodeCard = ({ chapter, node, progress, onClose }: { chapter: Chapter; node: KnowledgeNode; progress: Progress; onClose: () => void }) => {
   const st = nodeStatus(progress, node);
   const p = get(progress, node.id);
   if (st === "locked")
     return (
       <aside className="panel node-card">
-        <div className="mono">{node.en}</div>
+        <div className="mono" style={{ color: TRACKS[chapter.track].color }}>
+          {chapter.title} · {node.en}
+        </div>
         <h2>{node.title}</h2>
-        <p className="goal">这一节点的虚拟课堂还在制作中。先修：{node.needs.map((id) => nodeById(id).title).join("、")}</p>
+        <p className="goal">「{chapter.title}」的虚拟课堂还在制作中，这是它将要讲到的知识点之一。</p>
+        {node.needs.length > 0 && (
+          <div className="needs">
+            {node.needs.map((id) => (
+              <span key={id}>先修 · {titleOf(chapter, id)}</span>
+            ))}
+          </div>
+        )}
         <div className="actions">
           <button className="btn ghost small" onClick={onClose}>
-            关闭
+            ← 返回 {chapter.title}
           </button>
         </div>
       </aside>
@@ -152,7 +48,7 @@ const NodeCard = ({ node, progress, onClose }: { node: KnowledgeNode; progress: 
   return (
     <aside className="panel node-card">
       <div className="mono" style={{ color: STATUS_COLOR[st] }}>
-        {node.en}
+        {chapter.title} · {node.en}
       </div>
       <h2>{node.title}</h2>
       <span className={`status-chip status-${st}`}>{STATUS_LABEL[st]}</span>
@@ -173,43 +69,120 @@ const NodeCard = ({ node, progress, onClose }: { node: KnowledgeNode; progress: 
       {node.needs.length > 0 && (
         <div className="needs">
           {node.needs.map((id) => (
-            <span key={id}>先修 · {nodeById(id).title}</span>
+            <span key={id}>先修 · {titleOf(chapter, id)}</span>
           ))}
         </div>
       )}
       <div className="actions">
-        <button className="btn primary" onClick={() => go(`/lesson/${TOPIC.lesson}?node=${node.id}`)}>
+        <button className="btn primary" onClick={() => go(`/lesson/${chapter.lesson}?node=${node.id}`)}>
           {st === "new" ? "进入课堂" : st === "review" ? "去复习" : "继续学习"} →
         </button>
         <button className="btn ghost small" onClick={onClose}>
-          关闭
+          ← 返回 {chapter.title}
         </button>
       </div>
     </aside>
   );
 };
 
+const ChapterCard = ({ chapter, progress, onPickNode }: { chapter: Chapter; progress: Progress; onPickNode: (id: string) => void }) => {
+  const color = TRACKS[chapter.track].color;
+  const next = recommendNode(progress, chapter);
+  const learnable = chapter.children.filter((n) => n.span);
+  const mastered = learnable.filter((n) => status(get(progress, n.id)) === "mastered").length;
+  const started = learnable.some((n) => status(get(progress, n.id)) !== "new");
+  return (
+    <aside className="panel node-card chapter-card" style={{ ["--track" as string]: color }}>
+      <div className="mono" style={{ color }}>
+        {TRACKS[chapter.track].title} · {chapter.year}
+      </div>
+      <h2>{chapter.title}</h2>
+      <p className="goal">{chapter.blurb}</p>
+      {chapter.needs.length > 0 && (
+        <div className="needs">
+          {chapter.needs.map((id) => (
+            <button key={id} onClick={() => go(`/map/${id}`)}>
+              先修 · {chapterById(id)!.title}
+            </button>
+          ))}
+        </div>
+      )}
+      <div className="row">
+        <span>{chapter.children.length} 个子知识点</span>
+        <span>{chapter.lesson ? `已掌握 ${mastered}/${learnable.length}` : "课堂制作中"}</span>
+      </div>
+      <ol className="topic-list">
+        {chapter.children.map((n) => {
+          const st = nodeStatus(progress, n);
+          return (
+            <li key={n.id}>
+              <button onClick={() => onPickNode(n.id)} className={st === "locked" ? "locked" : ""}>
+                <i style={{ background: st === "locked" ? "transparent" : STATUS_COLOR[st], borderColor: st === "locked" ? color : "transparent" }} />
+                {n.title}
+                {n.id === next?.id && <em>下一步</em>}
+              </button>
+            </li>
+          );
+        })}
+      </ol>
+      <div className="actions">
+        {chapter.lesson ? (
+          <button className="btn primary" onClick={() => go(next ? `/lesson/${chapter.lesson}?node=${next.id}` : `/lesson/${chapter.lesson}`)}>
+            {!next ? "▶ 再上一遍" : started ? `继续：${next.title}` : "▶ 进入虚拟课堂"} →
+          </button>
+        ) : (
+          <button className="btn small" disabled>
+            课堂制作中
+          </button>
+        )}
+        <button className="btn ghost small" onClick={() => go("/map")}>
+          ← 知识宇宙
+        </button>
+      </div>
+    </aside>
+  );
+};
+
+/* ── page ────────────────────────────────────────────────────────────── */
 export const MapPage = () => {
+  const route = useRoute();
+  const focus = chapterById(route.path[1]);
   const progress = useProgress();
-  const next = recommend(progress);
   const [selected, setSelected] = useState<string | null>(null);
+  useEffect(() => setSelected(null), [focus]);
+
+  const nextChapter = recommendChapter(progress);
+  const nextNode = focus ? recommendNode(progress, focus) : null;
   const mastered = LEARNABLE.filter((n) => status(get(progress, n.id)) === "mastered").length;
-  const started = LEARNABLE.filter((n) => status(get(progress, n.id)) !== "new").length;
   const avg = LEARNABLE.reduce((s, n) => s + get(progress, n.id).score, 0) / LEARNABLE.length;
+  const selectedNode = focus && selected ? focus.children.find((n) => n.id === selected) : undefined;
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      if (selected) setSelected(null);
+      else if (focus) go("/map");
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [selected, focus]);
 
   return (
-    <main className="map">
+    <main className={`map${focus ? " focused" : ""}`}>
       <div className="map-canvas">
-        <Canvas camera={{ position: [CENTER.x - 3, CENTER.y + 2, 38], fov: 42 }} dpr={[1, 2]} onPointerMissed={() => setSelected(null)}>
-          <color attach="background" args={["#04060c"]} />
-          <Starfield count={1800} radius={70} />
-          <Edges progress={progress} />
-          {NODES.map((n, i) => (
-            <Node key={n.id} node={n} index={i} st={nodeStatus(progress, n)} selected={selected === n.id} recommended={!selected && n.id === next.id} onPick={() => setSelected(n.id)} />
-          ))}
-          <OrbitControls target={CENTER} enableDamping dampingFactor={0.08} minDistance={10} maxDistance={55} minAzimuthAngle={-0.9} maxAzimuthAngle={0.9} />
+        <Canvas camera={{ position: [0, 160, 90], fov: 42, near: 0.1, far: 900 }} dpr={[1, 2]} onPointerMissed={() => setSelected(null)}>
+          <color attach="background" args={["#020309"]} />
+          <Universe3D
+            focus={focus}
+            selected={selected}
+            progress={progress}
+            recommendedChapter={nextChapter.id}
+            recommendedNode={nextNode?.id ?? null}
+            onPickChapter={(id) => go(`/map/${id}`)}
+            onPickNode={setSelected}
+          />
           <EffectComposer multisampling={0}>
-            <Bloom intensity={0.9} luminanceThreshold={0.45} luminanceSmoothing={0.3} mipmapBlur />
+            <Bloom intensity={1.15} luminanceThreshold={0.32} luminanceSmoothing={0.4} mipmapBlur />
           </EffectComposer>
         </Canvas>
       </div>
@@ -219,48 +192,84 @@ export const MapPage = () => {
           知识<span>宇宙</span>
         </button>
         <span className="crumb">
-          我想学 · <b>{TOPIC.title}</b>
+          <button className="crumb-link" onClick={() => go("/map")}>
+            {TOPIC.title}
+          </button>
+          {focus && (
+            <>
+              {" "}
+              › <b>{focus.title}</b>
+            </>
+          )}
+          {selectedNode && <> › {selectedNode.title}</>}
         </span>
         <span className="spacer" />
-        <button className="btn small" onClick={() => go(`/lesson/${TOPIC.lesson}`)}>
-          从头上课
-        </button>
-        <button className="btn primary small" onClick={() => setSelected(next.id)}>
-          {next.span ? `推荐下一步：${next.title}` : `已全部掌握 · 下一站：${next.title}`}
-        </button>
+        {focus ? (
+          <button className="btn ghost small" onClick={() => go("/map")}>
+            ← 返回星系 <kbd>Esc</kbd>
+          </button>
+        ) : (
+          <button className="btn primary small" onClick={() => go(`/map/${nextChapter.id}`)}>
+            {nextChapter.lesson ? `飞往 ${nextChapter.title} →` : `下一站：${nextChapter.title}`}
+          </button>
+        )}
       </header>
 
-      <div className="map-title">
-        <div className="mono">KNOWLEDGE MAP · 知识地图</div>
-        <h1>{TOPIC.title}</h1>
-        <p>
-          {NODES.length} 个知识节点，{LEARNABLE.length} 个已开放虚拟课堂。连线表示先修关系，点击节点开始学习。
-        </p>
-        <div className="map-stats">
-          <div>
-            <b>{started}</b>已开始
+      {!focus && (
+        <div className="map-title">
+          <div className="mono">KNOWLEDGE UNIVERSE</div>
+          <h1>{TOPIC.title}</h1>
+          <p>
+            从 AlexNet 出发，三条旋臂通向今天的人工智能。
+            <br />
+            每颗恒星是一个改变了这门学科的模型或思想，环绕它的行星是要掌握的知识点。
+          </p>
+          <div className="map-stats">
+            <div>
+              <b>{CHAPTERS.length}</b>颗恒星
+            </div>
+            <div>
+              <b>{SUBNODE_COUNT}</b>颗行星
+            </div>
+            <div>
+              <b style={{ color: "#a8ff60" }}>
+                {mastered}
+                <small>/{LEARNABLE.length}</small>
+              </b>
+              已点亮
+            </div>
+            <div>
+              <b>{Math.round(avg * 100)}%</b>掌握度
+            </div>
           </div>
-          <div>
-            <b style={{ color: "#a8ff60" }}>{mastered}</b>已掌握
-          </div>
-          <div>
-            <b>{Math.round(avg * 100)}%</b>平均掌握度
+          <div className="arms">
+            {Object.values(TRACKS).map((t) => (
+              <div key={t.en} style={{ ["--track" as string]: t.color }}>
+                <i />
+                <span>{t.en}</span>
+                {t.title}
+              </div>
+            ))}
           </div>
         </div>
-      </div>
+      )}
 
-      {selected && <NodeCard node={nodeById(selected)} progress={progress} onClose={() => setSelected(null)} />}
+      {focus && !selectedNode && <ChapterCard key={focus.id} chapter={focus} progress={progress} onPickNode={setSelected} />}
+      {focus && selectedNode && <NodeCard key={selectedNode.id} chapter={focus} node={selectedNode} progress={progress} onClose={() => setSelected(null)} />}
 
       <div className="legend">
-        {(Object.keys(STATUS_LABEL) as Status[]).map((s) => (
-          <span key={s} className={`status-chip status-${s}`}>
-            {STATUS_LABEL[s]}
+        {focus &&
+          (Object.keys(STATUS_LABEL) as Status[]).map((st) => (
+            <span key={st} className="legend-dot" style={{ ["--c" as string]: STATUS_COLOR[st] }}>
+              {STATUS_LABEL[st]}
+            </span>
+          ))}
+        {focus && (
+          <span className="legend-dot" style={{ ["--c" as string]: TRACKS[focus.track].color, opacity: 0.6 }}>
+            筹备中
           </span>
-        ))}
-        <span className="status-chip" style={{ color: "#4a5578" }}>
-          即将开放
-        </span>
-        <span className="hint">拖动旋转 · 滚轮缩放</span>
+        )}
+        <span className="hint">{focus ? "点击行星查看 · 拖动环绕 · Esc 返回星系" : "悬停恒星看它的来路 · 点击飞入 · 拖动环绕 · 滚轮缩放"}</span>
       </div>
     </main>
   );

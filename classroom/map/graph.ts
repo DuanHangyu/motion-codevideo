@@ -10,9 +10,9 @@ export type KnowledgeNode = {
   goal: string;
   /** prerequisite node ids */
   needs: NodeId[];
-  /** 3D layout position in the map */
+  /** 3D layout position, local to the chapter (big node) it belongs to */
   pos: [number, number, number];
-  /** where this node is taught in the AlexNet lesson; absent = locked ("即将开放") */
+  /** where this node is taught in the lesson; absent = its lesson is still being made */
   span?: [number, number];
 };
 
@@ -21,7 +21,9 @@ const sceneSpan = (id: string): [number, number] => {
   return [s.start, s.end];
 };
 
-export const TOPIC = { id: "deep-learning", title: "深度学习入门", lesson: "alexnet", lessonTitle: "AlexNet：一次让机器学会“看”的革命" };
+export const TOPIC = { id: "deep-learning", title: "深度学习入门", lesson: "alexnet", chapter: "alexnet", chapterTitle: "AlexNet", lessonTitle: "AlexNet：一次让机器学会“看”的革命" };
+
+/** The sub-nodes of the AlexNet chapter, one per part of its lesson. */
 
 export const NODES: KnowledgeNode[] = [
   { id: "pixels", title: "图像的数字表示", en: "PIXELS", goal: "说清一张照片在计算机里是什么，以及为什么识别很难", needs: [], pos: [-12, 2.2, 0], span: sceneSpan("pixels") },
@@ -34,13 +36,6 @@ export const NODES: KnowledgeNode[] = [
   { id: "arch", title: "AlexNet 网络结构", en: "ARCHITECTURE", goal: "说出 5 个卷积层 + 3 个全连接层的设计与参数分布", needs: ["pooling"], pos: [6.6, 2.4, -0.6], span: sceneSpan("arch") },
   { id: "training", title: "数据 · 算力 · 正则化", en: "DATA · GPU · DROPOUT", goal: "解释 ImageNet、GPU、数据增强与 Dropout 各自解决了什么", needs: ["arch"], pos: [6.6, -2.8, 1.2], span: sceneSpan("keys") },
   { id: "paradigm", title: "深度学习的范式转变", en: "PARADIGM", goal: "说出从“设计特征”到“设计结构、数据决定特征”的转变", needs: ["arch", "training"], pos: [11, 0, 0], span: [scene("impact").start, scene("legacy").end] },
-  // not yet available: keeps the map honest about where the journey goes next
-  { id: "resnet", title: "残差网络", en: "RESNET", goal: "", needs: ["paradigm"], pos: [15, 3.4, -1.5] },
-  { id: "rnn", title: "循环神经网络", en: "RNN", goal: "", needs: ["paradigm"], pos: [15, -3.4, 1.5] },
-  { id: "attention", title: "注意力机制", en: "ATTENTION", goal: "", needs: ["rnn"], pos: [19, -1.8, 0] },
-  { id: "generative", title: "生成模型", en: "GENERATIVE", goal: "", needs: ["resnet"], pos: [19, 4.2, 1] },
-  { id: "transformer", title: "Transformer", en: "TRANSFORMER", goal: "", needs: ["attention", "resnet"], pos: [23, 0.6, -0.8] },
-  { id: "llm", title: "大语言模型", en: "LLM", goal: "", needs: ["transformer"], pos: [27, 0, 0] },
 ];
 
 /** When a node counts as watched: the end of the last voice-over line inside its span (before any quiz pause). */

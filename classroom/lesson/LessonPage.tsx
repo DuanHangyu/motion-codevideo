@@ -210,11 +210,11 @@ export const LessonPage = ({ query }: { query: URLSearchParams }) => {
         <button className="brand" onClick={() => go("/")}>
           知识<span>宇宙</span>
         </button>
-        <button className="btn ghost small" onClick={() => go("/map")}>
+        <button className="btn ghost small" onClick={() => go(`/map/${TOPIC.chapter}`)}>
           ← 知识地图
         </button>
         <span className="crumb">
-          {TOPIC.title} · <b>{TOPIC.lessonTitle}</b>
+          {TOPIC.title} › {TOPIC.chapterTitle} · <b>{TOPIC.lessonTitle}</b>
         </span>
         <span className="spacer" />
         <span className="mono">
@@ -352,7 +352,7 @@ export const LessonPage = ({ query }: { query: URLSearchParams }) => {
             questionIds={quiz.questions}
             isFinal={quiz.id === "cp-final"}
             onClose={finishQuiz}
-            onMap={() => go("/map")}
+            onMap={() => go(`/map/${TOPIC.chapter}`)}
             onReview={(q) => {
               setDone((d) => new Set(d).add(quiz.id));
               setQuiz(null);

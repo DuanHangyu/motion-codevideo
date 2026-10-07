@@ -11,7 +11,7 @@ const SUGGESTIONS = [
   { text: "强化学习", ok: false },
 ];
 
-const STEPS = ["理解你的学习目标", "拆解成 16 个知识节点", "建立先修关系", "匹配虚拟课堂与实验台"];
+const STEPS = ["理解你的学习目标", "铺开 11 个大节点：从 AlexNet 到大语言模型", "把每个大节点拆成子知识点", "建立先修关系，匹配虚拟课堂"];
 
 /** MVP: only the deep-learning map exists, so anything mentioning it is accepted; everything else is told so plainly. */
 const isSupported = (q: string) => /深度|神经|卷积|cnn|alexnet|deep|机器学习|ai|人工智能/i.test(q);
@@ -49,7 +49,7 @@ export const Home = () => {
         <h1>
           想学什么，就<em>走进去</em>
         </h1>
-        <p className="home-sub">输入一个学习目标，生成一张知识地图。每个节点都是一堂有声有色的虚拟课堂——随时暂停，画面就变成可以动手探索的实验台。</p>
+        <p className="home-sub">输入一个学习目标，生成一片知识宇宙：每个大节点是一个改变了这门学科的模型或思想，点开是一组子知识点和一堂有声有色的虚拟课堂——随时暂停，就能走进画面里动手探索。</p>
         <form className="ask" onSubmit={submit}>
           <span className="ask-prefix">我想学</span>
           <input value={q} onChange={(e) => setQ(e.target.value)} disabled={generating} aria-label="学习目标" />
@@ -78,13 +78,13 @@ export const Home = () => {
         ) : (
           <div className="home-features">
             <span>
-              <b>知识地图</b>先修关系一目了然
+              <b>知识宇宙</b>大节点 · 子知识点
             </span>
             <span>
               <b>虚拟课堂</b>配音 · 动画 · 3D
             </span>
             <span>
-              <b>暂停即探索</b>五个动手实验台
+              <b>暂停即探索</b>走进画面动手做
             </span>
             <span>
               <b>卡片测验</b>掌握度点亮地图
