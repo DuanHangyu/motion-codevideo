@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { loss } from "../../src/alexnet/lib/loss";
+import { loss } from "./loss";
 import { P, START, outside, step, verdict } from "./descent";
 
 const run = (start: P, lr: number, n: number) => {

@@ -1,4 +1,5 @@
-import { useMemo } from "react";
+import { MutableRefObject, useEffect, useMemo, useRef, useState } from "react";
+import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { AbsoluteFill, Img } from "remotion";
 import { Backdrop } from "../components/Frame";
@@ -9,7 +10,10 @@ import { ease, flash, fmtInt, hash, lerp, prog, rise, wobble } from "../lib/anim
 import { DATA, PRED_ZH, asset } from "../lib/data";
 import { cue, scene } from "../lib/timeline";
 import { useLoadedTextures } from "../lib/texture";
-import { BLOCKS, Block, CONV_PARAMS, FC_PARAMS, Kind, MAX_PARAMS, MID_X, END_X, byId } from "../lib/arch";
+import { useExplore } from "../lib/explore";
+import { sfx } from "../lib/sfx";
+import { ExploreTask, WorldButton } from "../components/ExploreUI";
+import { BLOCKS, Block, CONV_PARAMS, FC_PARAMS, Kind, LAYER_DETAIL, MAX_PARAMS, MID_X, END_X, byId } from "../lib/arch";
 import { AMBER, BG, CORAL, CYAN, DIM, FAINT, FONT_CN, FONT_DISPLAY, FONT_MONO, FONT_TITLE, IVORY, LIME, VIOLET } from "../lib/theme";
 
 const S = scene("arch");
@@ -39,9 +43,11 @@ const T_FACE = cue("a11", "猫的脸");
 const KIND_COLOR: Record<Kind, string> = { img: IVORY, conv: AMBER, pool: CYAN, fc: VIOLET };
 
 /* ── 3D pieces ─────────────────────────────────────────────────────────── */
-const Slab = ({ b, alpha, heat, lit }: { b: Block; alpha: number; heat: number; lit: number }) => {
+const Slab = ({ b, alpha, heat, lit, onPick, onHover }: { b: Block; alpha: number; heat: number; lit: number; onPick?: () => void; onHover?: (on: boolean) => void }) => {
   const geo = useMemo(() => new THREE.BoxGeometry(b.w, b.h, b.kind === "fc" ? 0.22 : b.h), [b]);
   const edges = useMemo(() => new THREE.EdgesGeometry(geo), [geo]);
+  // thin slabs (the FC layers) get a fatter invisible target so they are easy to click
+  const hit = useMemo(() => new THREE.BoxGeometry(Math.max(b.w, 0.7), b.h, Math.max(b.kind === "fc" ? 0.22 : b.h, 0.7)), [b]);
   const base = new THREE.Color(KIND_COLOR[b.kind]);
   const hot = new THREE.Color(CORAL);
   const col = base.clone().lerp(hot, heat);
@@ -49,6 +55,37 @@ const Slab = ({ b, alpha, heat, lit }: { b: Block; alpha: number; heat: number; 
     <group position={[b.x, 0, 0]}>
       <mesh geometry={geo}>
         <meshBasicMaterial color={col} transparent opacity={(0.07 + 0.25 * heat + 0.12 * lit) * alpha} depthWrite={false} toneMapped={false} />
+      </mesh>
+      <mesh
+        geometry={hit}
+        visible={!!onPick}
+        onClick={
+          onPick
+            ? (e) => {
+                e.stopPropagation();
+                onPick();
+              }
+            : undefined
+        }
+        onPointerOver={
+          onHover
+            ? (e) => {
+                e.stopPropagation();
+                onHover(true);
+                document.body.style.cursor = "pointer";
+              }
+            : undefined
+        }
+        onPointerOut={
+          onHover
+            ? () => {
+                onHover(false);
+                document.body.style.cursor = "";
+              }
+            : undefined
+        }
+      >
+        <meshBasicMaterial transparent opacity={0} depthWrite={false} colorWrite={false} />
       </mesh>
       <lineSegments geometry={edges}>
         <lineBasicMaterial color={col} transparent opacity={(0.55 + 0.45 * lit) * alpha} toneMapped={false} />
@@ -368,23 +405,77 @@ const Network = ({ t }: { t: number }) => {
   return textures ? <NetworkScene t={t} textures={textures} /> : null;
 };
 
+const ARCH = "arch";
+type ArchPlay = { sel: string; hover: string | null; launchAt: number | null };
+const KIND_ZH: Record<Kind, string> = { img: "输入", conv: "卷积层", pool: "池化层", fc: "全连接层" };
+
+const labelAnchor = (b: Block): V3 => [b.x, b.h / 2 + 0.35, b.kind === "fc" ? 0 : b.h / 2];
+
+/** Explore labels follow the live (student-orbited) camera, not the scripted pose. */
+const LabelTracker = ({ refs }: { refs: MutableRefObject<Record<string, HTMLDivElement | null>> }) => {
+  const v = useMemo(() => new THREE.Vector3(), []);
+  useFrame(({ camera }) => {
+    for (const b of BLOCKS) {
+      const el = refs.current[b.id];
+      if (!el) continue;
+      v.set(...labelAnchor(b)).project(camera);
+      el.style.left = `${(v.x * 0.5 + 0.5) * 1920}px`;
+      el.style.top = `${(-v.y * 0.5 + 0.5) * 1080}px`;
+      el.style.visibility = v.z > 1 ? "hidden" : "visible";
+    }
+  });
+  return null;
+};
+
 const NetworkScene = ({ t, textures }: { t: number; textures: Record<string, THREE.Texture> }) => {
+  const ex = useExplore(ARCH);
+  const [play, setPlay] = useState<ArchPlay | null>(null);
+  useEffect(() => {
+    if (ex.active && !play) setPlay({ sel: "conv1", hover: null, launchAt: null });
+    if (!ex.active && play) setPlay(null);
+  }, [ex.active, play]);
+  const live = !!play && ex.interactive;
+  const pb = ex.blend;
   const pose = archPose(t);
   const proj = projector(pose);
   const build = (i: number) => rise(t, S.start + 0.6 + i * 0.22, 0.7);
-  const heat = (b: Block) => (b.params ? rise(t, T_95 - 0.2, 1.0) * (b.params / MAX_PARAMS) ** 0.5 : 0) * (1 - rise(t, T_A9 - 0.3, 0.4));
-  const streamT0 = T_A9 + 0.3;
+  const heat = (b: Block) => (b.params ? rise(t, T_95 - 0.2, 1.0) * (b.params / MAX_PARAMS) ** 0.5 : 0) * (1 - rise(t, T_A9 - 0.3, 0.4)) * (1 - pb);
+  // in explore mode the forward pass runs on the student's clock
+  const clockT = play?.launchAt != null ? ex.clock : t;
+  const streamT0 = play?.launchAt != null ? play.launchAt : T_A9 + 0.3;
   const litAt = (b: Block) => {
     const arrive = streamT0 + b.x / 6.5;
-    return t > arrive && t < arrive + 3 ? flash(t, arrive, 0.6) + 0.25 : 0;
+    const sweep = clockT > arrive && clockT < arrive + 3 ? flash(clockT, arrive, 0.6) + 0.25 : 0;
+    const pick = play ? (play.sel === b.id ? 1 : play.hover === b.id ? 0.6 : 0) * pb : 0;
+    return Math.max(sweep, pick);
   };
-  const faceAlpha = (b: Block) => (b.kind === "img" ? 1 : rise(t, T_A9 + 0.3 + b.x / 6.5, 0.4) * 0.95 + (t < T_A9 ? 0.25 : 0));
+  const faceAlpha = (b: Block) => (b.kind === "img" ? 1 : Math.max(rise(clockT, streamT0 + b.x / 6.5, 0.4) * 0.95 + (t < T_A9 ? 0.25 : 0), play?.sel === b.id ? pb : 0));
+  const pick = (id: string) => {
+    if (!play || !live) return;
+    sfx.blip(id.startsWith("fc") ? 520 : id.startsWith("pool") ? 990 : 760, 0.12);
+    setPlay({ ...play, sel: id });
+  };
+  const launch = () => {
+    if (!play) return;
+    sfx.whoosh(true);
+    setTimeout(sfx.impact, END_X / 6.5 * 1000);
+    setPlay({ ...play, launchAt: ex.clock });
+  };
+  const sel = play ? byId(play.sel) : null;
+  const labelRefs = useRef<Record<string, HTMLDivElement | null>>({});
   return (
     <AbsoluteFill>
-      <Stage3D pose={pose} bloom={1.0} threshold={0.55} fog={[26, 60]}>
+      <Stage3D pose={pose} bloom={1.0} threshold={0.55} fog={[26, 60]} zone={ARCH}>
         {BLOCKS.map((b, i) => (
           <group key={b.id}>
-            <Slab b={b} alpha={build(i)} heat={heat(b)} lit={litAt(b)} />
+            <Slab
+              b={b}
+              alpha={build(i)}
+              heat={heat(b)}
+              lit={litAt(b)}
+              onPick={live ? () => pick(b.id) : undefined}
+              onHover={live ? (on) => setPlay((p) => (p ? { ...p, hover: on ? b.id : p.hover === b.id ? null : p.hover } : p)) : undefined}
+            />
             {b.kind === "fc" && <Neurons b={b} alpha={build(i)} lit={litAt(b)} />}
           </group>
         ))}
@@ -393,11 +484,55 @@ const NetworkScene = ({ t, textures }: { t: number; textures: Record<string, THR
           <Face key={b.id} b={b} tex={textures[asset(b.fmap!)]} alpha={faceAlpha(b) * build(1)} />
         ))}
         {t > T_A3 - 0.5 && t < T_A4 + 0.5 && <Frustum k={rise(t, T_A3, 0.6) * (1 - rise(t, T_A4, 0.4))} sweep={prog(t, T_A3, T_A4)} />}
-        {t > T_A9 && <Stream t={t} t0={streamT0} alpha={1 - rise(t, T_A11 + 0.5, 1)} />}
+        {play && <LabelTracker refs={labelRefs} />}
+        {(t > T_A9 || play?.launchAt != null) && <Stream t={clockT} t0={streamT0} alpha={play?.launchAt != null ? 1 : 1 - rise(t, T_A11 + 0.5, 1)} />}
       </Stage3D>
-      <Labels t={t} proj={proj} />
-      <Callouts t={t} proj={proj} />
-      <ParamsBar t={t} />
+      <AbsoluteFill style={{ opacity: 1 - pb, pointerEvents: "none" }}>
+        <Labels t={t} proj={proj} />
+        <Callouts t={t} proj={proj} />
+        <ParamsBar t={t} />
+      </AbsoluteFill>
+      {play && sel && (
+        <AbsoluteFill style={{ opacity: pb, pointerEvents: "none" }}>
+          {BLOCKS.map((b) => {
+            const p = proj(...labelAnchor(b));
+            const on = b.id === play.sel || b.id === play.hover;
+            return (
+              <div key={b.id} ref={(el) => void (labelRefs.current[b.id] = el)} style={{ position: "absolute", left: p.x, top: p.y, transform: "translate(-50%, -100%)", textAlign: "center", whiteSpace: "nowrap", fontFamily: FONT_CN, fontSize: on ? 20 : 15, color: on ? IVORY : KIND_COLOR[b.kind], opacity: on ? 1 : 0.7 }}>
+                {b.name}
+              </div>
+            );
+          })}
+          <Panel at={{ x: 60, y: 610 }} style={{ width: 760, padding: "20px 26px", pointerEvents: live ? "auto" : "none", display: "grid", gridTemplateColumns: sel.fmap ? "1fr 170px" : "1fr", columnGap: 22 }} glow={KIND_COLOR[sel.kind]}>
+            <div>
+            <Mono size={15} color={KIND_COLOR[sel.kind]}>
+              {KIND_ZH[sel.kind]} · {sel.dims}
+            </Mono>
+            <div style={{ fontFamily: FONT_TITLE, fontWeight: 700, fontSize: 34, color: IVORY, marginTop: 6 }}>{sel.name}</div>
+            <Body size={21} color={DIM} style={{ marginTop: 8 }}>
+              {LAYER_DETAIL[sel.id]}
+            </Body>
+            <div style={{ display: "flex", gap: 26, marginTop: 14, fontFamily: FONT_DISPLAY }}>
+              <div>
+                <div style={{ fontSize: 34, color: KIND_COLOR[sel.kind] }}>{fmtInt(sel.params ?? 0)}</div>
+                <div style={{ fontFamily: FONT_CN, fontSize: 17, color: DIM }}>参数</div>
+              </div>
+              <div>
+                <div style={{ fontSize: 34, color: IVORY }}>{(((sel.params ?? 0) / (CONV_PARAMS + FC_PARAMS)) * 100).toFixed(1)}%</div>
+                <div style={{ fontFamily: FONT_CN, fontSize: 17, color: DIM }}>占全网</div>
+              </div>
+            </div>
+            <div style={{ marginTop: 14 }}>
+              <WorldButton on color={CYAN} onClick={launch}>
+                ▶ 把猫送进网络
+              </WorldButton>
+            </div>
+            </div>
+            {sel.fmap && <Img src={asset(sel.fmap)} style={{ width: 170, alignSelf: "center", borderRadius: 8, imageRendering: "pixelated" }} />}
+          </Panel>
+        </AbsoluteFill>
+      )}
+      <ExploreTask zone={ARCH} task="点击任意一层，看它的尺寸、参数和这只猫在这一层的样子" sub={["拖动旋转网络", "按“把猫送进网络”看数据流过"]} goal="找出全网参数最多的那一层" done={play?.sel === "fc6"} />
     </AbsoluteFill>
   );
 };

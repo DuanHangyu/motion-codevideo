@@ -4,6 +4,8 @@ import { loadFonts } from "../lib/fonts";
 import { ChapterCard } from "./components/ChapterCard";
 import { ChapterRail, Grain, Vignette } from "./components/Frame";
 import { Subtitles } from "./components/Subtitles";
+import { FreezeFX } from "./components/ExploreUI";
+import { useExplore } from "./lib/explore";
 import { prog } from "./lib/anim";
 import { FPS, sceneAt } from "./lib/timeline";
 import { BG, DIM, FONT_MONO } from "./lib/theme";
@@ -53,6 +55,7 @@ const useFonts = () => {
 export const Lesson = () => {
   useFonts();
   const t = useCurrentFrame() / FPS;
+  const ex = useExplore();
   const s = sceneAt(t);
   const Scene = SCENES[s.id] ?? Todo;
   // every chapter fades to black over its last half second; the next one opens behind its chapter card
@@ -65,8 +68,11 @@ export const Lesson = () => {
       <ChapterCard />
       <Vignette />
       <Grain />
-      <ChapterRail />
-      <Subtitles />
+      <FreezeFX />
+      <AbsoluteFill style={{ opacity: 1 - ex.blend, pointerEvents: "none" }}>
+        <ChapterRail />
+        <Subtitles />
+      </AbsoluteFill>
       {audio.mix && <Audio src={staticFile(audio.mix)} />}
     </AbsoluteFill>
   );

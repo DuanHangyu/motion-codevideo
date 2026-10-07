@@ -1,5 +1,5 @@
 import { cue } from "../../src/alexnet/lib/timeline";
-import type { LabId } from "../lesson/zones";
+import type { WorldId } from "../../src/alexnet/lib/worlds";
 import type { NodeId } from "../map/graph";
 import { stepFor } from "../progress/mastery";
 
@@ -15,7 +15,7 @@ export type Question = {
   answer: number;
   explain: string;
   /** where to go when the student wants to revisit this */
-  review: { at: number; lab?: LabId };
+  review: { at: number; world?: WorldId };
 };
 
 const TF = [{ text: "正确" }, { text: "错误" }];
@@ -44,7 +44,7 @@ export const QUESTIONS: Question[] = [
     ],
     answer: 1,
     explain: "一个能发现竖直边缘的检测器在左上角有用、在右下角也一样有用，所以让同一组 9 个权重滑过整张图。",
-    review: { at: cue("c8"), lab: "conv" },
+    review: { at: cue("c8"), world: "conv-slide" },
   },
   {
     id: "q-kernel-predict",
@@ -65,8 +65,8 @@ export const QUESTIONS: Question[] = [
       { text: "D", img: "alexnet/hog.png" },
     ],
     answer: 0,
-    explain: "左边是 −、右边是 +：它在左右亮度突变的地方响应最大，也就是竖直方向的边缘。去卷积实验台换几个核试试看。",
-    review: { at: cue("c12"), lab: "conv" },
+    explain: "左边是 −、右边是 +：它在左右亮度突变的地方响应最大，也就是竖直方向的边缘。走进卷积工作台换几个核试试看。",
+    review: { at: cue("c12"), world: "conv-slide" },
   },
   {
     id: "q-linear",
@@ -76,7 +76,7 @@ export const QUESTIONS: Question[] = [
     options: TF,
     answer: 0,
     explain: "线性变换的组合仍然是线性变换：W₁₀₀···W₂W₁ 可以合并成一个矩阵 W。没有非线性，网络只能画直线。",
-    review: { at: cue("r2"), lab: "activation" },
+    review: { at: cue("r2"), world: "activation" },
   },
   {
     id: "q-vanish",
@@ -86,7 +86,7 @@ export const QUESTIONS: Question[] = [
     options: [{ text: "约 25%" }, { text: "约 2%" }, { text: "约 0.0015%" }, { text: "还是 100%" }],
     answer: 2,
     explain: "0.25⁸ ≈ 0.0000153，也就是约 0.0015%。层数一多，前面的层几乎收不到信号——这就是梯度消失。",
-    review: { at: cue("r6"), lab: "activation" },
+    review: { at: cue("r6"), world: "activation" },
   },
   {
     id: "q-relu-grad",
@@ -96,7 +96,7 @@ export const QUESTIONS: Question[] = [
     options: [{ text: "输出 3，梯度 1" }, { text: "输出 1，梯度 3" }, { text: "输出 0，梯度 0" }, { text: "输出 3，梯度 0.25" }],
     answer: 0,
     explain: "ReLU(x) = max(0, x)，x > 0 时原样输出、斜率恒为 1，误差可以畅通无阻地传回去。",
-    review: { at: cue("r7"), lab: "activation" },
+    review: { at: cue("r7"), world: "activation" },
   },
   {
     id: "q-params-where",
@@ -106,7 +106,7 @@ export const QUESTIONS: Question[] = [
     options: [{ text: "第一层卷积（11×11 的大卷积核）" }, { text: "5 个卷积层平均分布" }, { text: "最后 3 个全连接层" }, { text: "池化层" }],
     answer: 2,
     explain: "全连接层占了超过 95% 的参数（仅 FC6 就有约 3775 万）。卷积层负责“看”，参数却很省。",
-    review: { at: cue("a8"), lab: "arch" },
+    review: { at: cue("a8"), world: "arch" },
   },
   {
     id: "q-pool",
@@ -146,7 +146,7 @@ export const QUESTIONS: Question[] = [
     ],
     answer: 1,
     explain: "只往旁边挪 6 个像素，就有约七成的像素值变了。同一个概念对应着千变万化的数字。",
-    review: { at: cue("p5"), lab: "pixel" },
+    review: { at: cue("p5"), world: "pixels" },
   },
   {
     id: "q-features",
@@ -175,8 +175,8 @@ export const QUESTIONS: Question[] = [
     prompt: "梯度下降的每一步，都沿着让损失下降最快的方向（最陡的下坡）走一小步。",
     options: TF,
     answer: 0,
-    explain: "w ← w − η·∂L/∂w：沿负梯度方向走，步子大小由学习率 η 决定。在实验台里把学习率调大，看看会发生什么。",
-    review: { at: cue("n6"), lab: "descent" },
+    explain: "w ← w − η·∂L/∂w：沿负梯度方向走，步子大小由学习率 η 决定。走进损失山地把学习率调大，看看会发生什么。",
+    review: { at: cue("n6"), world: "descent" },
   },
   {
     id: "q-dropout",

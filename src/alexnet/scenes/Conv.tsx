@@ -10,6 +10,7 @@ import { asset, gray28 } from "../lib/data";
 import { cue, lineEnd, scene } from "../lib/timeline";
 import { AMBER, BG, CORAL, CYAN, DIM, FAINT, FONT_CN, FONT_DISPLAY, FONT_HAND, FONT_MONO, FONT_TITLE, IVORY, LIME, VIOLET } from "../lib/theme";
 import { ConvSlide, EdgeReveal, KERNEL } from "./ConvSlide";
+import { Hubel } from "./Hubel";
 
 const S = scene("conv");
 const T_C1 = cue("c1");
@@ -24,9 +25,6 @@ const T_TL = cue("c4", "猫出现在左上角");
 const T_BR = cue("c4", "右下角");
 const T_C5 = cue("c5");
 const T_C6 = cue("c6");
-const T_1959 = cue("c6", "1959");
-const T_SMALL = cue("c6", "一小块");
-const T_ORIENT = cue("c6", "特定方向");
 const T_C7 = cue("c7");
 const T_LOCAL = cue("c7", "局部连接");
 const T_C8 = cue("c8");
@@ -294,69 +292,6 @@ const Think = ({ t }: { t: number }) => {
         <div style={{ fontFamily: FONT_TITLE, fontWeight: 700, fontSize: 58, color: IVORY, letterSpacing: 6 }}>如果是你，会怎样改进这个设计？</div>
         <div style={{ fontFamily: FONT_CN, fontSize: 26, color: DIM, marginTop: 30, opacity: rise(t, t0, 0.6) }}>提示：想想你自己是怎么看东西的 —— 可以先暂停视频</div>
       </div>
-    </AbsoluteFill>
-  );
-};
-
-/* ── c6: Hubel & Wiesel — a neuron that loves one orientation ─────────── */
-export const barAngle = (t: number) => Math.sin((t - T_C6) * 0.9) * (Math.PI / 2) * 0.95;
-export const firingRate = (t: number) => Math.max(0, Math.cos(barAngle(t))) ** 6;
-const BIN = 1 / 90;
-const spikeAt = (bin: number) => hash(bin * 0.731 + 17) < firingRate(bin * BIN) * 0.55 + 0.01;
-
-const Hubel = ({ t }: { t: number }) => {
-  const ang = barAngle(t);
-  const rate = firingRate(t);
-  const field = rise(t, T_SMALL, 0.6);
-  const orient = rise(t, T_ORIENT, 0.6);
-  const SW = 640;
-  const SH = 470;
-  const window = 3;
-  const now = Math.floor(t / BIN);
-  const spikes: number[] = [];
-  for (let b = now - Math.floor(window / BIN); b <= now; b++) if (b * BIN > T_C6 && spikeAt(b)) spikes.push(b);
-  return (
-    <AbsoluteFill>
-      <Heading size={44} at={{ x: 160, y: 140 }} style={{ opacity: rise(t, T_1959, 0.6) }}>
-        1959 · 休伯尔与威泽尔的实验
-      </Heading>
-      <Mono at={{ x: 162, y: 210 }} size={16} style={{ opacity: rise(t, T_1959 + 0.3, 0.6) }}>
-        HUBEL & WIESEL · 1981 年诺贝尔生理学或医学奖
-      </Mono>
-      {/* the stimulus screen the cat is looking at */}
-      <div style={{ position: "absolute", left: 160, top: 300, width: SW, height: SH, borderRadius: 16, background: "#05070B", border: `1px solid ${FAINT}`, overflow: "hidden" }}>
-        <div style={{ position: "absolute", left: SW / 2 - 18, top: SH / 2 - 140, width: 36, height: 280, background: IVORY, boxShadow: `0 0 40px ${IVORY}`, transform: `rotate(${(ang * 180) / Math.PI}deg)`, borderRadius: 4 }} />
-        <svg width={SW} height={SH} style={{ position: "absolute", inset: 0, opacity: field }}>
-          <circle cx={SW / 2} cy={SH / 2} r={150} stroke={AMBER} strokeWidth={2} strokeDasharray="8 8" fill="none" />
-          <text x={SW / 2 + 110} y={SH / 2 - 130} fill={AMBER} fontFamily={FONT_CN} fontSize={20}>
-            感受野
-          </text>
-        </svg>
-        <Mono at={{ x: 24, y: 20 }} size={14}>
-          猫眼前的屏幕 · 一根光条在旋转
-        </Mono>
-      </div>
-      {/* oscilloscope */}
-      <div style={{ position: "absolute", left: 880, top: 300, width: 880, height: SH, borderRadius: 16, background: "rgba(6,12,10,0.9)", border: `1px solid ${LIME}44`, overflow: "hidden" }}>
-        <svg width={880} height={SH} style={{ position: "absolute", inset: 0 }}>
-          {Array.from({ length: 11 }, (_, i) => (
-            <line key={i} x1={i * 88} y1={0} x2={i * 88} y2={SH} stroke={LIME} strokeOpacity={0.07} />
-          ))}
-          <line x1={0} y1={SH / 2} x2={880} y2={SH / 2} stroke={LIME} strokeOpacity={0.35} />
-          {spikes.map((b) => {
-            const x = 880 - ((now - b) * BIN * 880) / window;
-            const h = 120 + hash(b) * 60;
-            return <path key={b} d={`M ${x - 3} ${SH / 2} L ${x} ${SH / 2 - h} L ${x + 4} ${SH / 2 + h * 0.35} L ${x + 7} ${SH / 2}`} stroke={LIME} strokeWidth={2.5} fill="none" style={{ filter: "drop-shadow(0 0 4px #A8FF60)" }} />;
-          })}
-        </svg>
-        <Mono at={{ x: 24, y: 20 }} size={14} color={LIME}>
-          视觉皮层中一个神经元的放电
-        </Mono>
-        <div style={{ position: "absolute", right: 30, top: 18, fontFamily: FONT_MONO, fontSize: 20, color: LIME }}>{Math.round(rate * 48)} 次/秒</div>
-      </div>
-      <Body size={30} at={{ x: 960, y: 830 }} center color={rate > 0.5 ? LIME : DIM} style={{ opacity: orient, whiteSpace: "nowrap" }}>
-        {rate > 0.5 ? "▲ 光条竖直时：疯狂放电" : "光条倾斜时：几乎沉默"}
-      </Body>
     </AbsoluteFill>
   );
 };

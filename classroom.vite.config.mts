@@ -8,5 +8,5 @@ export default defineConfig({
   plugins: [react()],
   server: { port: 5180, strictPort: true, host: "127.0.0.1" },
   build: { outDir: "../out/classroom", emptyOutDir: true, chunkSizeWarningLimit: 4000 },
-  test: { root: ".", include: ["classroom/**/*.test.ts"] },
+  test: { root: ".", include: ["classroom/**/*.test.ts", "src/alexnet/**/*.test.ts"] },
 });

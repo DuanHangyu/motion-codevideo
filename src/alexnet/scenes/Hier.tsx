@@ -1,11 +1,15 @@
+import { useEffect, useState } from "react";
 import { AbsoluteFill, Img } from "remotion";
+import { ExploreTask, WorldButton } from "../components/ExploreUI";
+import { useExplore } from "../lib/explore";
+import { sfx } from "../lib/sfx";
 import { Backdrop } from "../components/Frame";
 import { Show } from "../components/Show";
 import { Body, Heading, Mono, Panel } from "../components/ui";
 import { ease, flash, hash, lerp, prog, rise, wobble } from "../lib/anim";
 import { asset } from "../lib/data";
 import { cue, scene } from "../lib/timeline";
-import { AMBER, BG, CYAN, DIM, FAINT, FONT_CN, FONT_DISPLAY, FONT_MONO, FONT_TITLE, IVORY, LIME, VIOLET } from "../lib/theme";
+import { AMBER, BG, CORAL, CYAN, DIM, FAINT, FONT_CN, FONT_DISPLAY, FONT_MONO, FONT_TITLE, IVORY, LIME, VIOLET } from "../lib/theme";
 
 const S = scene("hier");
 const T_F1 = cue("f1");
@@ -40,30 +44,82 @@ const POOL_IN = [
 ];
 const CELL = 110;
 
+const POOLING = "pooling";
+type Grid = number[][];
+type PoolPlay = { grid: Grid; mode: "max" | "avg"; flash: number };
+const pool = (g: Grid, mode: "max" | "avg") =>
+  [0, 1, 2, 3].map((k) => {
+    const bx = (k % 2) * 2;
+    const by = Math.floor(k / 2) * 2;
+    const v = [g[by][bx], g[by][bx + 1], g[by + 1][bx], g[by + 1][bx + 1]];
+    return mode === "max" ? Math.max(...v) : v.reduce((a, b) => a + b, 0) / 4;
+  });
+const ORIGINAL_OUT = pool(POOL_IN, "max");
+const fmtOut = (v: number) => (Number.isInteger(v) ? String(v) : v.toFixed(2));
+
 const Pooling = ({ t }: { t: number }) => {
+  const ex = useExplore(POOLING);
+  const [play, setPlay] = useState<PoolPlay | null>(null);
+  useEffect(() => {
+    if (ex.active && !play) setPlay({ grid: POOL_IN.map((r) => [...r]), mode: "max", flash: 0 });
+    if (!ex.active && play) setPlay(null);
+  }, [ex.active, play]);
+  const live = !!play && ex.interactive;
+  const b = ex.blend;
   const X = 330;
   const Y = 300;
   const step = Math.floor(prog(t, T_MAX - 0.2, T_MAX + 3.0) * 3.999);
   const started = t >= T_MAX - 0.2;
   const wx = (step % 2) * 2;
   const wy = Math.floor(step / 2) * 2;
-  const done = (k: number) => started && k <= step;
+  const done = (k: number) => (started && k <= step) || !!play;
   const OX = 1100;
   const OY = Y + CELL;
+  const grid = play && b > 0.5 ? play.grid : POOL_IN;
+  const mode = play?.mode ?? "max";
+  const out = pool(grid, mode);
+  const changedCells = play ? play.grid.flat().filter((v, i) => v !== POOL_IN.flat()[i]).length : 0;
+  const sameOut = mode === "max" && out.every((v, i) => v === ORIGINAL_OUT[i]);
+  const edit = (i: number, d: number) => {
+    if (!play) return;
+    const g = play.grid.map((r) => [...r]);
+    const y = Math.floor(i / 4);
+    const x = i % 4;
+    g[y][x] = (g[y][x] + d + 10) % 10;
+    sfx.blip(400 + g[y][x] * 90, 0.08);
+    setPlay({ ...play, grid: g, flash: ex.clock });
+  };
+  const shift = () => {
+    if (!play) return;
+    sfx.whoosh(true);
+    setPlay({ ...play, grid: play.grid.map((r) => [0, ...r.slice(0, 3)]), flash: ex.clock });
+  };
+  const outFlash = play ? Math.exp(-(ex.clock - play.flash) / 0.4) : 0;
   return (
     <AbsoluteFill>
-      <Heading size={46} at={{ x: X, y: 160 }} color={AMBER} style={{ opacity: rise(t, T_POOL, 0.5) }}>
+      <Heading size={46} at={{ x: X, y: 160 }} color={AMBER} style={{ opacity: rise(t, T_POOL, 0.5) * (1 - b) }}>
         最大池化 <span style={{ fontFamily: FONT_MONO, fontSize: 22, color: DIM, letterSpacing: 4 }}>MAX POOLING</span>
       </Heading>
-      {POOL_IN.flat().map((v, i) => {
+      {grid.flat().map((v, i) => {
         const x = i % 4;
         const y = Math.floor(i / 4);
-        const inWin = started && x >= wx && x < wx + 2 && y >= wy && y < wy + 2;
-        const blockMax = Math.max(...[0, 1].flatMap((dy) => [0, 1].map((dx) => POOL_IN[Math.floor(y / 2) * 2 + dy][Math.floor(x / 2) * 2 + dx])));
-        const isMax = v === blockMax;
+        const block = Math.floor(y / 2) * 2 + Math.floor(x / 2);
+        const inWin = play ? true : started && x >= wx && x < wx + 2 && y >= wy && y < wy + 2;
+        const blockMax = Math.max(...[0, 1].flatMap((dy) => [0, 1].map((dx) => grid[Math.floor(y / 2) * 2 + dy][Math.floor(x / 2) * 2 + dx])));
+        const isMax = mode === "max" && v === blockMax;
+        const edited = play && v !== POOL_IN[y][x];
         return (
           <div
             key={i}
+            onClick={live ? () => edit(i, 1) : undefined}
+            onContextMenu={
+              live
+                ? (e) => {
+                    e.preventDefault();
+                    edit(i, -1);
+                  }
+                : undefined
+            }
             style={{
               position: "absolute",
               left: X + x * CELL,
@@ -72,65 +128,121 @@ const Pooling = ({ t }: { t: number }) => {
               height: CELL - 8,
               borderRadius: 10,
               background: `rgba(60,224,255,${0.06 + v * 0.05})`,
-              border: `2px solid ${inWin ? AMBER : "rgba(255,255,255,0.08)"}`,
+              border: `2px solid ${edited ? VIOLET : inWin ? (play ? ["#FFB547", "#3CE0FF", "#A8FF60", "#9B7BFF"][block] + "88" : AMBER) : "rgba(255,255,255,0.08)"}`,
               display: "flex",
               justifyContent: "center",
               alignItems: "center",
               fontFamily: FONT_DISPLAY,
               fontSize: 44,
               color: inWin && isMax ? AMBER : IVORY,
-              opacity: rise(t, T_F1 + 0.3 + i * 0.04, 0.4),
+              opacity: Math.max(rise(t, T_F1 + 0.3 + i * 0.04, 0.4), b),
               boxShadow: inWin && isMax ? `0 0 30px ${AMBER}88` : "none",
+              cursor: live ? "pointer" : undefined,
+              userSelect: "none",
             }}
           >
             {v}
           </div>
         );
       })}
-      <div style={{ position: "absolute", left: X + wx * CELL - 8, top: Y + wy * CELL - 8, width: CELL * 2 + 8, height: CELL * 2 + 8, border: `3px solid ${AMBER}`, borderRadius: 14, opacity: started ? 1 : 0 }} />
+      {!play && <div style={{ position: "absolute", left: X + wx * CELL - 8, top: Y + wy * CELL - 8, width: CELL * 2 + 8, height: CELL * 2 + 8, border: `3px solid ${AMBER}`, borderRadius: 14, opacity: started ? 1 : 0 }} />}
       <div style={{ position: "absolute", left: 870, top: Y + 180, fontFamily: FONT_DISPLAY, fontSize: 60, color: DIM, opacity: rise(t, T_MAX, 0.5) }}>→</div>
       {[0, 1, 2, 3].map((k) => {
-        const bx = (k % 2) * 2;
-        const by = Math.floor(k / 2) * 2;
-        const m = Math.max(POOL_IN[by][bx], POOL_IN[by][bx + 1], POOL_IN[by + 1][bx], POOL_IN[by + 1][bx + 1]);
         const on = done(k);
+        const same = play ? out[k] === ORIGINAL_OUT[k] : true;
+        const col = play && b > 0.5 ? (same ? LIME : CORAL) : AMBER;
         return (
-          <div key={k} style={{ position: "absolute", left: OX + (k % 2) * CELL, top: OY + Math.floor(k / 2) * CELL, width: CELL - 8, height: CELL - 8, borderRadius: 10, border: `2px solid ${on ? AMBER : FAINT}`, background: on ? "rgba(255,181,71,0.12)" : "transparent", display: "flex", justifyContent: "center", alignItems: "center", fontFamily: FONT_DISPLAY, fontSize: 44, color: AMBER, opacity: rise(t, T_MAX, 0.4) }}>
-            {on ? m : ""}
+          <div
+            key={k}
+            style={{
+              position: "absolute",
+              left: OX + (k % 2) * CELL,
+              top: OY + Math.floor(k / 2) * CELL,
+              width: CELL - 8,
+              height: CELL - 8,
+              borderRadius: 10,
+              border: `2px solid ${on ? col : FAINT}`,
+              background: on ? `${col}1f` : "transparent",
+              display: "flex",
+              justifyContent: "center",
+              alignItems: "center",
+              fontFamily: FONT_DISPLAY,
+              fontSize: mode === "avg" ? 32 : 44,
+              color: col,
+              opacity: rise(t, T_MAX, 0.4),
+              transform: `scale(${1 + outFlash * 0.12})`,
+              boxShadow: `0 0 ${outFlash * 40}px ${col}`,
+            }}
+          >
+            {on ? fmtOut(out[k]) : ""}
           </div>
         );
       })}
       <Mono at={{ x: OX, y: OY + 2 * CELL + 20 }} size={16} color={AMBER} style={{ opacity: rise(t, T_MAX, 0.4) }}>
-        4×4 → 2×2 · 每块只留最大值
+        {play && b > 0.5 ? (mode === "max" ? "最大池化 · 绿色 = 和原来一样" : "平均池化 · 每块取平均") : "4×4 → 2×2 · 每块只留最大值"}
       </Mono>
+      {play ? (
+        <Panel at={{ x: 1380, y: 300 }} style={{ width: 480, padding: "24px 28px", opacity: b, pointerEvents: live ? "auto" : "none" }} glow={LIME}>
+          <div style={{ display: "flex", gap: 10, marginBottom: 14 }}>
+            <WorldButton on={mode === "max"} onClick={() => setPlay({ ...play, mode: "max", flash: ex.clock })}>
+              最大池化
+            </WorldButton>
+            <WorldButton on={mode === "avg"} onClick={() => setPlay({ ...play, mode: "avg", flash: ex.clock })}>
+              平均池化
+            </WorldButton>
+          </div>
+          <div style={{ display: "flex", gap: 10 }}>
+            <WorldButton on color={CYAN} onClick={shift}>
+              → 把特征右移一格
+            </WorldButton>
+            <WorldButton onClick={() => setPlay({ ...play, grid: POOL_IN.map((r) => [...r]), flash: ex.clock })}>还原</WorldButton>
+          </div>
+          <Body size={22} color={DIM} style={{ marginTop: 16 }}>
+            已改动 <b style={{ color: VIOLET }}>{changedCells}</b> 个数字 · 输出 {sameOut ? <b style={{ color: LIME }}>完全没变</b> : <b style={{ color: CORAL }}>变了</b>}
+          </Body>
+          <Body size={20} color={DIM} style={{ marginTop: 6 }}>
+            点击数字 +1，右键 −1
+          </Body>
+        </Panel>
+      ) : (
+        <>
       <Panel at={{ x: 1380, y: 300 }} style={{ width: 480, padding: "24px 30px", opacity: rise(t, T_F2, 0.6) }}>
-        <Body size={24}>
-          <span style={{ color: LIME }}>✓</span> 特征图变小，计算量下降
-        </Body>
-        <Body size={24} style={{ marginTop: 12, opacity: rise(t, T_SHIFT, 0.5) }}>
-          <span style={{ color: LIME }}>✓</span> 特征挪动一点，最大值还在
-        </Body>
-      </Panel>
-      {/* overlapping pooling, AlexNet's variant */}
-      <Panel at={{ x: 1380, y: 520 }} style={{ width: 480, padding: "24px 30px", opacity: rise(t, T_OVERLAP, 0.6) }} glow={CYAN}>
-        <Mono size={15} color={CYAN}>
-          ALEXNET · 重叠池化
-        </Mono>
-        <svg width={360} height={170} style={{ marginTop: 14 }}>
-          {Array.from({ length: 7 }, (_, i) => (
-            <rect key={i} x={10 + i * 36} y={40} width={32} height={32} fill="rgba(255,255,255,0.06)" />
-          ))}
-          <rect x={8} y={20} width={110} height={72} fill="none" stroke={AMBER} strokeWidth={3} rx={6} />
-          <rect x={80} y={30} width={110} height={72} fill="none" stroke={CYAN} strokeWidth={3} rx={6} />
-          <rect x={82} y={40} width={34} height={32} fill={LIME} opacity={0.35} />
-          <text x={10} y={140} fill={DIM} fontFamily={FONT_CN} fontSize={20}>
-            窗口 3×3 · 步长 2 → 相邻窗口重叠
-          </text>
-        </svg>
-        <Body size={22} color={DIM}>
-          论文发现：能稍稍减轻过拟合
-        </Body>
-      </Panel>
+          <Body size={24}>
+            <span style={{ color: LIME }}>✓</span> 特征图变小，计算量下降
+          </Body>
+          <Body size={24} style={{ marginTop: 12, opacity: rise(t, T_SHIFT, 0.5) }}>
+            <span style={{ color: LIME }}>✓</span> 特征挪动一点，最大值还在
+          </Body>
+        </Panel>
+        {/* overlapping pooling, AlexNet's variant */}
+        <Panel at={{ x: 1380, y: 520 }} style={{ width: 480, padding: "24px 30px", opacity: rise(t, T_OVERLAP, 0.6) }} glow={CYAN}>
+          <Mono size={15} color={CYAN}>
+            ALEXNET · 重叠池化
+          </Mono>
+          <svg width={360} height={170} style={{ marginTop: 14 }}>
+            {Array.from({ length: 7 }, (_, i) => (
+              <rect key={i} x={10 + i * 36} y={40} width={32} height={32} fill="rgba(255,255,255,0.06)" />
+            ))}
+            <rect x={8} y={20} width={110} height={72} fill="none" stroke={AMBER} strokeWidth={3} rx={6} />
+            <rect x={80} y={30} width={110} height={72} fill="none" stroke={CYAN} strokeWidth={3} rx={6} />
+            <rect x={82} y={40} width={34} height={32} fill={LIME} opacity={0.35} />
+            <text x={10} y={140} fill={DIM} fontFamily={FONT_CN} fontSize={20}>
+              窗口 3×3 · 步长 2 → 相邻窗口重叠
+            </text>
+          </svg>
+          <Body size={22} color={DIM}>
+            论文发现：能稍稍减轻过拟合
+          </Body>
+        </Panel>
+          </>
+      )}
+      <ExploreTask
+        zone={POOLING}
+        task="点数字改输入，看哪些改动会影响池化结果"
+        sub={["把特征右移一格试试", "换成平均池化比一比"]}
+        goal="改动至少 3 个数字，但让最大池化的输出保持不变"
+        done={changedCells >= 3 && sameOut}
+      />
     </AbsoluteFill>
   );
 };

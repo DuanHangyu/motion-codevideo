@@ -1,4 +1,4 @@
-import { loss } from "../../src/alexnet/lib/loss";
+import { loss } from "./loss";
 
 export type P = [number, number];
 export const BOUND = 7;

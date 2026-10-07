@@ -1,12 +1,13 @@
 import { PointerEvent, useRef } from "react";
 import { SCENES } from "../../src/alexnet/lib/timeline";
-import { CHECKPOINTS, ZONES } from "./zones";
+import { CHECKPOINTS, PREDICTIONS } from "./zones";
+import { WORLDS } from "../../src/alexnet/lib/worlds";
 
 type Props = { t: number; total: number; done: Set<string>; onSeek: (t: number) => void };
 
 const pct = (x: number, total: number) => `${(x / total) * 100}%`;
 
-/** Chapter scrubber with explore zones (amber bands) and quiz checkpoints (violet diamonds). */
+/** Chapter scrubber with worlds (amber bands), guesses (cyan dots) and quiz checkpoints (violet diamonds). */
 export const LessonTimeline = ({ t, total, done, onSeek }: Props) => {
   const track = useRef<HTMLDivElement>(null);
   const dragging = useRef(false);
@@ -37,8 +38,11 @@ export const LessonTimeline = ({ t, total, done, onSeek }: Props) => {
           );
         })}
       </div>
-      {ZONES.map((z) => (
-        <div key={z.lab} className="tl-zone" style={{ left: pct(z.from, total), width: pct(z.to - z.from, total) }} title={z.title} />
+      {WORLDS.map((w) => (
+        <div key={w.id} className="tl-zone tl-world" style={{ left: pct(w.from, total), width: pct(w.to - w.from, total) }} title={`◆ ${w.title}`} />
+      ))}
+      {PREDICTIONS.map((p) => (
+        <div key={p.id} className="tl-guess" style={{ left: pct(p.at, total) }} title="先猜后看" />
       ))}
       {CHECKPOINTS.map((c) => (
         <div key={c.id} className={`tl-cp${done.has(c.id) ? " done" : ""}`} style={{ left: pct(c.at, total) }} title={c.title} />

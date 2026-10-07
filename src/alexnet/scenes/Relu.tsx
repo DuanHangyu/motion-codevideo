@@ -1,4 +1,8 @@
+import { useEffect, useRef, useState } from "react";
 import { AbsoluteFill } from "remotion";
+import { ExploreTask, WorldButton, WorldSlider } from "../components/ExploreUI";
+import { explore, useExplore, capturePointer } from "../lib/explore";
+import { sfx } from "../lib/sfx";
 import { Backdrop } from "../components/Frame";
 import { Show } from "../components/Show";
 import { Body, Heading, Mono, Panel } from "../components/ui";
@@ -206,10 +210,10 @@ const Legend = ({ color, name, desc, k, dashed }: { color: string; name: string;
 );
 
 /* ── r6 & r8: an error signal travelling back through 8 layers ─────────── */
-const Chain = ({ t, t0, factor, color, label }: { t: number; t0: number; factor: number; color: string; label: string }) => {
-  const L = 8;
+const Chain = ({ t, t0, factor, color, label, layers = 8 }: { t: number; t0: number; factor: number; color: string; label: string; layers?: number }) => {
+  const L = layers;
   const X0 = 1660;
-  const DX = 200;
+  const DX = 1400 / (L - 1);
   const Y = 760;
   const per = 0.55;
   const pos = Math.max(0, (t - t0) / per);
@@ -226,13 +230,13 @@ const Chain = ({ t, t0, factor, color, label }: { t: number; t0: number; factor:
           const reached = pos >= i;
           return (
             <g key={i}>
-              <circle cx={x} cy={Y} r={26} fill="rgba(14,20,36,0.95)" stroke={reached ? color : FAINT} strokeWidth={2} strokeOpacity={reached ? Math.max(0.15, g ** 0.35) : 1} />
-              <text x={x} y={Y + 70} textAnchor="middle" fontFamily={FONT_MONO} fontSize={20} fill={reached ? color : DIM} opacity={reached ? Math.max(0.25, g ** 0.25) : 0.5}>
+              <circle cx={x} cy={Y} r={Math.min(26, DX * 0.3)} fill="rgba(14,20,36,0.95)" stroke={reached ? color : FAINT} strokeWidth={2} strokeOpacity={reached ? Math.max(0.15, g ** 0.35) : 1} />
+              <text x={x} y={Y + (i % 2 && L > 10 ? 96 : 70)} textAnchor="middle" fontFamily={FONT_MONO} fontSize={L > 10 ? 16 : 20} fill={reached ? color : DIM} opacity={reached ? Math.max(0.25, g ** 0.25) : 0.5}>
                 {reached ? (g < 0.001 ? g.toExponential(0) : g.toFixed(g < 0.01 ? 4 : 2)) : "·"}
               </text>
               {i > 0 && (
-                <text x={x + DX / 2} y={Y - 22} textAnchor="middle" fontFamily={FONT_MONO} fontSize={16} fill={DIM} opacity={reached ? 0.8 : 0.2}>
-                  ×{factor}
+                <text x={x + DX / 2} y={Y - 22} textAnchor="middle" fontFamily={FONT_MONO} fontSize={L > 10 ? 12 : 16} fill={DIM} opacity={reached ? 0.8 : 0.2}>
+                  ×{Number.isInteger(factor) ? factor : factor.toFixed(2)}
                 </text>
               )}
             </g>
@@ -245,6 +249,136 @@ const Chain = ({ t, t0, factor, color, label }: { t: number; t0: number; factor:
       <div style={{ position: "absolute", left: X0 - (L - 1) * DX - 60, top: Y - 34, fontFamily: FONT_CN, fontSize: 22, color: DIM, transform: "translateX(-100%)" }}>← 前面的层</div>
       <div style={{ position: "absolute", left: X0 + 50, top: Y - 34, fontFamily: FONT_CN, fontSize: 22, color: CORAL }}>误差</div>
     </div>
+  );
+};
+
+/* ── explore: the gradient conveyor belt ───────────────────────────────── */
+const ACTIVATION = "activation";
+const FNS = {
+  sigmoid: { name: "sigmoid", color: AMBER, f: sigmoid, d: (x: number) => sigmoid(x) * (1 - sigmoid(x)), scale: 1 },
+  tanh: { name: "tanh", color: VIOLET, f: Math.tanh, d: (x: number) => 1 - Math.tanh(x) ** 2, scale: 1 },
+  relu: { name: "ReLU", color: LIME, f: (x: number) => Math.max(0, x), d: (x: number) => (x > 0 ? 1 : 0), scale: 0.2 },
+};
+type FnId = keyof typeof FNS;
+type ActPlay = { fn: FnId; x: number; layers: number; loopAt: number };
+const LAYER_SEC = 0.42;
+
+const ActivationWorld = ({ t, children }: { t: number; children: React.ReactNode }) => {
+  const ex = useExplore(ACTIVATION);
+  const [play, setPlay] = useState<ActPlay | null>(null);
+  const reached = useRef(-1);
+  useEffect(() => {
+    if (ex.active && !play) setPlay({ fn: "sigmoid", x: 0, layers: 8, loopAt: ex.clock });
+    if (!ex.active && play) setPlay(null);
+  }, [ex.active, play, ex.clock]);
+  const blend = ex.blend;
+  const live = !!play && ex.interactive;
+  const F = play ? FNS[play.fn] : FNS.relu;
+  const g = play ? F.d(play.x) : 1;
+  const remaining = play ? g ** (play.layers - 1) : 1;
+  const span = play ? play.layers * LAYER_SEC + 1.0 : 1;
+  const local = play ? (ex.clock - play.loopAt) % span : 0;
+  const idx = Math.floor(local / LAYER_SEC);
+  // one note per layer the signal reaches, quieter and lower as it fades
+  useEffect(() => {
+    if (!live || !play) return;
+    if (idx < reached.current) reached.current = -1;
+    if (idx > reached.current && idx < play.layers) {
+      reached.current = idx;
+      const amp = g ** idx;
+      if (amp > 1e-4) sfx.blip(660 + 900 * Math.min(1, amp), 0.03 + 0.12 * Math.min(1, amp));
+    }
+  });
+  // functional updates: a drag fires several events before React re-renders
+  const set = (patch: Partial<ActPlay>) => setPlay((p) => (p ? { ...p, ...patch, loopAt: ex.clock } : p));
+  const setX = (x: number) => setPlay((p) => (p ? { ...p, x: Math.max(-XR, Math.min(XR, Math.round(x * 20) / 20)) } : p));
+
+  return (
+    <>
+      <AbsoluteFill style={{ opacity: 1 - blend }}>{children}</AbsoluteFill>
+      {play && (
+        <AbsoluteFill style={{ opacity: blend }}>
+          {/* plot + controls sit between the task banner (top) and the signal chain (bottom) */}
+          <AbsoluteFill style={{ transform: "translateY(120px) scale(0.78)", transformOrigin: "50% 0" }}>
+            <svg width={1920} height={1080} style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
+              <rect x={PX - 20} y={PY - 20} width={PW + 40} height={PH + 40} rx={16} fill="rgba(4,6,12,0.82)" stroke={live ? F.color : FAINT} strokeOpacity={0.6} />
+              <line x1={PX} y1={sy(0)} x2={PX + PW} y2={sy(0)} stroke={FAINT} strokeWidth={2} />
+              <line x1={sx(0)} y1={PY} x2={sx(0)} y2={PY + PH} stroke={FAINT} strokeWidth={2} />
+              <path d={curve(F.d, 1)} stroke={CORAL} strokeWidth={3} strokeDasharray="8 6" fill="none" />
+              <path d={curve((x) => F.f(x) * F.scale, 1)} stroke={F.color} strokeWidth={6} fill="none" style={{ filter: `drop-shadow(0 0 10px ${F.color})` }} />
+              <line x1={sx(play.x)} y1={PY} x2={sx(play.x)} y2={PY + PH} stroke={IVORY} strokeOpacity={0.3} strokeDasharray="4 6" />
+              <line
+                x1={sx(play.x - 1.4)}
+                y1={sy((F.f(play.x) - F.d(play.x) * 1.4) * F.scale)}
+                x2={sx(play.x + 1.4)}
+                y2={sy((F.f(play.x) + F.d(play.x) * 1.4) * F.scale)}
+                stroke={IVORY}
+                strokeWidth={2}
+              />
+              <circle cx={sx(play.x)} cy={sy(F.f(play.x) * F.scale)} r={12} fill={IVORY} style={{ filter: "drop-shadow(0 0 10px #fff)" }} />
+              <circle cx={sx(play.x)} cy={sy(g)} r={8} fill={CORAL} />
+              <text x={sx(play.x) + 14} y={sy(g) - 12} fill={CORAL} fontFamily={FONT_MONO} fontSize={20}>
+                f′ = {g.toFixed(3)}
+              </text>
+            </svg>
+            {/* drag anywhere on the plot to move x */}
+            <div
+              onPointerDown={(e) => {
+                e.stopPropagation();
+                capturePointer(e.currentTarget, e.pointerId);
+                explore.setDragging(true);
+                const r = e.currentTarget.getBoundingClientRect();
+                setX(((e.clientX - r.left) / r.width) * 2 * XR - XR);
+              }}
+              onPointerMove={(e) => {
+                if (!e.buttons) return;
+                const r = e.currentTarget.getBoundingClientRect();
+                setX(((e.clientX - r.left) / r.width) * 2 * XR - XR);
+              }}
+              onPointerUp={() => {
+                explore.setDragging(false);
+                set({});
+              }}
+              style={{ position: "absolute", left: PX, top: PY, width: PW, height: PH, cursor: live ? "ew-resize" : undefined, pointerEvents: live ? "auto" : "none", touchAction: "none" }}
+            />
+            <Panel at={{ x: PX + PW + 70, y: PY - 10 }} style={{ width: 600, padding: "22px 28px", pointerEvents: live ? "auto" : "none" }} glow={F.color}>
+              <div style={{ display: "flex", gap: 10 }}>
+                {(Object.keys(FNS) as FnId[]).map((id) => (
+                  <WorldButton key={id} on={play.fn === id} color={FNS[id].color} onClick={() => set({ fn: id })}>
+                    {FNS[id].name}
+                  </WorldButton>
+                ))}
+              </div>
+              <div style={{ display: "flex", gap: 30, marginTop: 18, fontFamily: FONT_DISPLAY }}>
+                <div>
+                  <div style={{ fontFamily: FONT_CN, fontSize: 18, color: DIM }}>输入 x</div>
+                  <div style={{ fontSize: 40, color: IVORY }}>{play.x.toFixed(2)}</div>
+                </div>
+                <div>
+                  <div style={{ fontFamily: FONT_CN, fontSize: 18, color: DIM }}>梯度 f′(x)</div>
+                  <div style={{ fontSize: 40, color: CORAL }}>{g.toFixed(3)}</div>
+                </div>
+                <div>
+                  <div style={{ fontFamily: FONT_CN, fontSize: 18, color: DIM }}>传到最前面还剩</div>
+                  <div style={{ fontSize: 40, color: remaining > 0.5 ? LIME : remaining > 0.01 ? AMBER : CORAL }}>{remaining >= 0.001 ? `${(remaining * 100).toFixed(1)}%` : remaining.toExponential(1)}</div>
+                </div>
+              </div>
+              <div style={{ marginTop: 14 }}>
+                <WorldSlider label="网络层数" value={play.layers} min={3} max={14} step={1} unit={(v) => `${v} 层`} onChange={(v) => set({ layers: v })} color={F.color} />
+              </div>
+            </Panel>
+          </AbsoluteFill>
+          <Chain t={ex.clock} t0={play.loopAt + Math.floor((ex.clock - play.loopAt) / span) * span} factor={Math.round(g * 1000) / 1000} color={F.color} label={`${F.name}：每层 ×f′(x)`} layers={play.layers} />
+        </AbsoluteFill>
+      )}
+      <ExploreTask
+        zone={ACTIVATION}
+        task="信号快消失了！拖动曲线上的 x、换激活函数，把它救回来"
+        sub={["sigmoid 在哪里梯度最大？", "x 变成负数时 ReLU 会怎样？"]}
+        goal="让误差信号穿过 12 层以上，仍然保留 90%"
+        done={!!play && play.layers >= 12 && remaining >= 0.9}
+      />
+    </>
   );
 };
 
@@ -319,6 +453,17 @@ const Moral = ({ t }: { t: number }) => {
   );
 };
 
+/** The narrated curves; they step aside while the student is inside the activation world. */
+const ScriptedCurves = ({ t }: { t: number }) => {
+  const ex = useExplore(ACTIVATION);
+  const lift = -130 * ease.inOutCubic(prog(t, T_EACH - 0.8, T_EACH)) * (1 - ease.inOutCubic(prog(t, T_R7 - 0.3, T_R7 + 0.5))) + -130 * ease.inOutCubic(prog(t, T_FAST - 1.2, T_FAST - 0.4));
+  return (
+    <AbsoluteFill style={{ transform: `translateY(${lift}px)`, opacity: 1 - ex.blend }}>
+      <Curves t={t} />
+    </AbsoluteFill>
+  );
+};
+
 export const Relu = ({ t }: { t: number }) => (
   <AbsoluteFill style={{ background: BG }}>
     <Backdrop grid={0.03} tint={LIME} />
@@ -330,14 +475,14 @@ export const Relu = ({ t }: { t: number }) => (
       <Boundary t={t} />
     </Show>
     <Show t={t} from={T_R4 - 0.1} to={T_R9 + 0.1}>
-      <AbsoluteFill style={{ transform: `translateY(${-130 * ease.inOutCubic(prog(t, T_EACH - 0.8, T_EACH)) * (1 - ease.inOutCubic(prog(t, T_R7 - 0.3, T_R7 + 0.5))) + -130 * ease.inOutCubic(prog(t, T_FAST - 1.2, T_FAST - 0.4))}px)` }}>
-        <Curves t={t} />
-      </AbsoluteFill>
+      <ScriptedCurves t={t} />
       <Show t={t} from={T_EACH - 0.6} to={T_R7 + 0.2}>
-        <Chain t={t} t0={T_EACH + 0.3} factor={0.25} color={AMBER} label="sigmoid：每层最多 ×0.25" />
-        <Heading size={46} at={{ x: 960, y: 920 }} center color={CORAL} style={{ opacity: rise(t, T_VANISH, 0.6) }}>
-          梯度消失
-        </Heading>
+        <ActivationWorld t={t}>
+          <Chain t={t} t0={T_EACH + 0.3} factor={0.25} color={AMBER} label="sigmoid：每层最多 ×0.25" />
+          <Heading size={46} at={{ x: 960, y: 920 }} center color={CORAL} style={{ opacity: rise(t, T_VANISH, 0.6) }}>
+            梯度消失
+          </Heading>
+        </ActivationWorld>
       </Show>
       <Show t={t} from={T_FAST - 1.0} to={T_R9 + 0.1}>
         <Chain t={t} t0={T_FAST - 0.6} factor={1} color={LIME} label="ReLU：每层 ×1" />

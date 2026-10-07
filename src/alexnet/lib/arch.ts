@@ -35,3 +35,19 @@ export const MID_X = END_X / 2;
 export const CONV_PARAMS = BLOCKS.filter((b) => b.kind === "conv").reduce((s, b) => s + (b.params ?? 0), 0);
 export const FC_PARAMS = BLOCKS.filter((b) => b.kind === "fc").reduce((s, b) => s + (b.params ?? 0), 0);
 export const MAX_PARAMS = 37752832;
+
+/** One-paragraph explanation of each layer, shown when the student opens it. */
+export const LAYER_DETAIL: Record<string, string> = {
+  input: "一张 224×224 的彩色图像：224 × 224 × 3 = 150,528 个数字。",
+  conv1: "96 个 11×11×3 的大卷积核，步长 4，一下子把图像压缩到 55×55。负责捕捉边缘、颜色这些最基础的图案。",
+  pool1: "3×3 窗口、步长 2 的重叠最大池化。没有任何参数，只是把特征图缩小一半。",
+  conv2: "256 个 5×5 卷积核，在第一层的边缘基础上组合出纹理和简单形状。",
+  pool2: "再次重叠最大池化：27×27 → 13×13。",
+  conv3: "384 个 3×3 小卷积核。感受野越来越大，开始组合出眼睛、耳朵这样的部件。",
+  conv4: "384 个 3×3 卷积核，继续加深抽象。",
+  conv5: "256 个 3×3 卷积核。这一层的神经元已经能“看到”接近整只猫的范围。",
+  pool5: "最后一次池化：6×6×256 = 9,216 个数，被拉平送进全连接层。",
+  fc6: "9,216 → 4,096。一层就有约 3,775 万个参数，占全网 60% 以上。训练时用 Dropout 随机关掉一半神经元。",
+  fc7: "4,096 → 4,096，约 1,678 万个参数，同样使用 Dropout。",
+  fc8: "4,096 → 1,000，对应 1000 个类别，再经过 softmax 变成概率。",
+};

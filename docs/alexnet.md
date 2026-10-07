@@ -71,7 +71,7 @@ npm run alexnet:render    # 渲染成片
 
 ```bash
 npm run classroom        # http://127.0.0.1:5180
-npm run classroom:test   # 单元测试（卷积、梯度下降、掌握度、探索区/测验点）
+npm run classroom:test   # 单元测试（卷积、梯度下降、掌握度、画面世界/先猜后看/测验点）
 npm run classroom:build  # 产出 out/classroom/
 ```
 
@@ -79,11 +79,22 @@ npm run classroom:build  # 产出 out/classroom/
 |---|---|
 | `classroom/home` | 首页：输入学习目标 |
 | `classroom/map` | 知识图谱数据（`graph.ts`：节点、先修关系、对应课程片段）与 3D 地图 |
-| `classroom/lesson` | 课堂页：播放器、时间轴；`zones.ts` 定义 5 个探索区和 4 组测验点（按配音关键词定位） |
-| `classroom/explore` | 5 个实验台（像素、梯度下降、卷积、激活函数、网络结构）与纯函数计算模块 |
-| `classroom/quiz` | 16 道题（含“预测特征图”题）与答题流程 |
+| `classroom/lesson` | 课堂页：播放器、时间轴、进入/离开画面世界；`zones.ts` 定义 6 次“先猜后看”和 4 组测验点 |
+| `classroom/quiz` | 16 道题（含“预测特征图”题）与答题流程，错题可直接回到对应的画面世界 |
 | `classroom/progress` | 掌握度模型（纯函数）与 localStorage 存储 |
 
-课堂画面直接复用 `src/alexnet/Lesson.tsx`，与 MP4 是同一套代码。改文案后重跑配音，探索区、测验点、“看完”判定都会自动对齐。
+课堂画面直接复用 `src/alexnet/Lesson.tsx`，与 MP4 是同一套代码。改文案后重跑配音，画面世界、先猜后看、测验点、“看完”判定都会自动对齐。
 
-深链：`#/lesson/alexnet?node=conv` 从某个节点开始；`&lab=conv` 直接打开实验台；`&t=326` 跳到指定秒数。
+### 暂停即探索：画面世界
+
+暂停后，学生直接走进当前画面里操作，不另开白板。离开时画面平滑恢复到脚本状态，再继续播放。
+
+- `src/alexnet/lib/worlds.ts`：10 个画面世界（像素、神经元、梯度下降、Hubel 实验、卷积滑动、激活函数、池化、网络结构、数据增强、Dropout），各自的时间窗、对应知识节点和提示。
+- `src/alexnet/lib/explore.ts`：“时间冻结”状态（off → entering → on → returning，`blend` 0..1 过渡 0.9 秒）。场景用 `useExplore(id)` 接管鼠标，按 `blend` 在脚本值和学生操作值之间插值，所以离开时自然回到原样。渲染 MP4 时从不进入探索态，画面仍然完全确定。
+- `src/alexnet/components/ExploreUI.tsx`：任务提示与挑战（完成时有音效和光环，并计入该节点掌握度）、按钮与滑块、冻结特效。
+- `src/alexnet/components/Stage3D.tsx`：传入 `zone` 后，3D 场景在探索时推近镜头、允许拖动旋转，离开时飞回脚本机位。
+- `src/alexnet/lib/sfx.ts`：Web Audio 程序合成的交互音效，不用音频文件。
+
+快捷键：空格 播放/暂停（探索中＝继续听讲），`E` 走进画面，`Esc` 退出探索，`←` `→` ±5 秒。
+
+深链：`#/lesson/alexnet?node=conv` 从某个节点开始；`?world=conv-slide` 直接走进某个画面世界；`?t=326` 跳到指定秒数。

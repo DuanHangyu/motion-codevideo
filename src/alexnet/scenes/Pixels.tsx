@@ -1,10 +1,13 @@
-import { useLayoutEffect, useMemo, useRef } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { AbsoluteFill, Img } from "remotion";
 import { Backdrop } from "../components/Frame";
 import { Show } from "../components/Show";
 import { Pose, Stage3D, lerpPose, projector } from "../components/Stage3D";
 import { Body, Heading, Mono, Panel } from "../components/ui";
+import { ExploreTask, WorldSlider } from "../components/ExploreUI";
+import { useExplore } from "../lib/explore";
+import { sfx } from "../lib/sfx";
 import { ease, fmtInt, hash, lerp, prog, rise } from "../lib/anim";
 import { DATA, asset } from "../lib/data";
 import { cue, lineEnd, scene } from "../lib/timeline";
@@ -132,30 +135,55 @@ const SP = 0.16;
 const LAYER_GAP = 3.2;
 const CH_COLOR = [new THREE.Color("#FF4D5E"), new THREE.Color("#5CFF7A"), new THREE.Color("#4DA6FF")];
 
-const Columns = ({ t }: { t: number }) => {
+const PIXELS = "pixels";
+type PixelPlay = { shift: number; gain: number; hover: number | null; found: boolean };
+
+/** The student's version of pixel i: moved `shift` cells right (uncovered cells keep their value) and brightened. */
+const playedPixel = (i: number, pl: PixelPlay): number[] => {
+  const x = i % N;
+  const src = x - pl.shift >= 0 ? i - pl.shift : i;
+  return DATA.rgb64[src].map((v) => Math.min(255, v * pl.gain));
+};
+const lumOf = (p: number[]) => (0.299 * p[0] + 0.587 * p[1] + 0.114 * p[2]) / 255;
+const changedShare = (pl: PixelPlay) => {
+  let n = 0;
+  for (let i = 0; i < N * N; i++) if (Math.abs(lumOf(playedPixel(i, pl)) - lumOf(DATA.rgb64[i])) * 255 > 2) n++;
+  return n / (N * N);
+};
+/** a pixel of the cat's blue eye */
+const isEye = (i: number) => DATA.rgb64[i][2] > DATA.rgb64[i][0] + 40;
+
+const Columns = ({ t, play, blend, onHover }: { t: number; play: PixelPlay | null; blend: number; onHover: (i: number | null) => void }) => {
   const ref = useRef<THREE.InstancedMesh>(null);
   const dummy = useMemo(() => new THREE.Object3D(), []);
   const color = useMemo(() => new THREE.Color(), []);
+  const coral = useMemo(() => new THREE.Color(CORAL), []);
   const grow = ease.inOutCubic(prog(t, T_RGB + 0.2, T_RGB + 2.2));
   const split = ease.inOutCubic(prog(t, T_RGB_SPLIT + 0.4, T_RGB_SPLIT + 2.4));
 
   useLayoutEffect(() => {
     const mesh = ref.current;
     if (!mesh) return;
-    for (let c = 0; c < 3; c++) {
-      for (let i = 0; i < N * N; i++) {
-        const px = DATA.rgb64[i];
+    for (let i = 0; i < N * N; i++) {
+      const orig = DATA.rgb64[i];
+      const px = play ? playedPixel(i, play) : orig;
+      const changed = play ? Math.abs(lumOf(px) - lumOf(orig)) * 255 > 2 : false;
+      const hovered = play?.hover === i;
+      for (let c = 0; c < 3; c++) {
         const x = (i % N) - N / 2 + 0.5;
         const z = Math.floor(i / N) - N / 2 + 0.5;
-        const lum = (0.299 * px[0] + 0.587 * px[1] + 0.114 * px[2]) / 255;
-        const v = px[c] / 255;
-        const h = 0.02 + lerp(lum, v, split) * 1.6 * grow;
+        const h0 = 0.02 + lerp(lumOf(orig), orig[c] / 255, split) * 1.6 * grow;
+        const h1 = 0.02 + lerp(lumOf(px), px[c] / 255, split) * 1.6 * grow;
+        const h = lerp(h0, h1, blend) + (hovered ? 0.35 * blend : 0);
         const base = (1 - c) * LAYER_GAP * split;
         dummy.position.set(x * SP, base + h / 2, z * SP);
-        dummy.scale.set(SP * 0.9, h, SP * 0.9);
+        dummy.scale.set(SP * (hovered ? 1.15 : 0.9), h, SP * (hovered ? 1.15 : 0.9));
         dummy.updateMatrix();
         mesh.setMatrixAt(c * N * N + i, dummy.matrix);
+        const v = lerp(orig[c], px[c], blend) / 255;
         color.setRGB(px[0] / 255, px[1] / 255, px[2] / 255).lerp(CH_COLOR[c].clone().multiplyScalar(0.25 + v), split);
+        if (changed) color.lerp(coral, 0.55 * blend);
+        if (hovered) color.setRGB(1.6, 1.6, 1.6);
         mesh.setColorAt(c * N * N + i, color);
       }
     }
@@ -164,9 +192,19 @@ const Columns = ({ t }: { t: number }) => {
   });
 
   return (
-    <instancedMesh ref={ref} args={[undefined, undefined, 3 * N * N]} frustumCulled={false}>
+    <instancedMesh
+      ref={ref}
+      args={[undefined, undefined, 3 * N * N]}
+      frustumCulled={false}
+      onPointerMove={(e) => {
+        if (!play || e.instanceId === undefined) return;
+        e.stopPropagation();
+        onHover(e.instanceId % (N * N));
+      }}
+      onPointerOut={() => play && onHover(null)}
+    >
       <boxGeometry args={[1, 1, 1]} />
-      <meshStandardMaterial roughness={0.5} metalness={0.1} />
+      <meshStandardMaterial roughness={0.5} metalness={0.1} toneMapped={false} />
     </instancedMesh>
   );
 };
@@ -185,17 +223,42 @@ const landscapePose = (t: number): Pose => {
 };
 
 const Landscape = ({ t }: { t: number }) => {
+  const ex = useExplore(PIXELS);
+  const [play, setPlay] = useState<PixelPlay | null>(null);
+  useEffect(() => {
+    if (ex.active && !play) setPlay({ shift: 0, gain: 1, hover: null, found: false });
+    if (!ex.active && play) setPlay(null);
+  }, [ex.active, play]);
+  const blend = ex.blend;
+  const live = !!play && ex.interactive;
+  const share = useMemo(() => (play ? changedShare(play) : 0), [play?.shift, play?.gain]); // eslint-disable-line react-hooks/exhaustive-deps
+  const lastHover = useRef<number | null>(null);
+  const hover = (i: number | null) => {
+    if (!play || i === lastHover.current) return;
+    lastHover.current = i;
+    if (i !== null) sfx.tick(((i % N) / N - 0.5) * 1.4);
+    setPlay({ ...play, hover: i, found: play.found || (i !== null && isEye(i)) });
+  };
+  const set = (patch: Partial<PixelPlay>) => {
+    if (!play) return;
+    sfx.blip(500 + (patch.shift ?? play.shift) * 60 + (patch.gain ?? play.gain) * 200, 0.05);
+    setPlay({ ...play, ...patch });
+  };
+
   const pose = landscapePose(t);
   const proj = projector(pose);
   const split = rise(t, T_RGB_SPLIT + 1.6, 0.8);
   const count = rise(t, T_COUNT, 0.7);
+  const hv = play?.hover ?? null;
+  const hvPx = hv !== null && play ? playedPixel(hv, play).map(Math.round) : null;
+  const hvAt = hv !== null ? proj(((hv % N) - N / 2 + 0.5) * SP, LAYER_GAP + 1.4, (Math.floor(hv / N) - N / 2 + 0.5) * SP) : null;
   return (
     <AbsoluteFill>
-      <Stage3D pose={pose} bloom={0.6} threshold={0.7}>
+      <Stage3D pose={pose} bloom={0.6} threshold={0.7} zone={PIXELS}>
         <ambientLight intensity={0.35} />
         <directionalLight position={[5, 12, 6]} intensity={1.5} />
         <directionalLight position={[-6, 4, -4]} intensity={0.6} color={CYAN} />
-        <Columns t={t} />
+        <Columns t={t} play={play} blend={blend} onHover={hover} />
       </Stage3D>
       {["R · 红", "G · 绿", "B · 蓝"].map((label, c) => {
         const p = proj(-N * SP * 0.5 - 0.4, (1 - c) * LAYER_GAP + 0.3, N * SP * 0.5);
@@ -205,15 +268,34 @@ const Landscape = ({ t }: { t: number }) => {
           </Mono>
         );
       })}
-      <div style={{ position: "absolute", right: 120, top: 330, textAlign: "right", opacity: count }}>
+      {hvPx && hvAt && live && (
+        <div style={{ position: "absolute", left: hvAt.x, top: hvAt.y, transform: "translate(-50%, -100%)", pointerEvents: "none", padding: "10px 16px", borderRadius: 12, background: "rgba(4,6,12,0.88)", border: `1px solid ${isEye(hv!) ? LIME : FAINT}`, fontFamily: FONT_MONO, fontSize: 22, whiteSpace: "nowrap" }}>
+          <div style={{ fontSize: 14, color: DIM }}>
+            像素 ({hv! % N}, {Math.floor(hv! / N)}){isEye(hv!) ? " · 蓝眼睛！" : ""}
+          </div>
+          <span style={{ color: "#FF8C8C" }}>R {hvPx[0]}</span> <span style={{ color: "#8CFF8C" }}>G {hvPx[1]}</span> <span style={{ color: "#8CC8FF" }}>B {hvPx[2]}</span>
+        </div>
+      )}
+      <div style={{ position: "absolute", right: 120, top: lerp(330, 210, blend), textAlign: "right", opacity: Math.max(count, blend) }}>
         <div style={{ fontFamily: FONT_DISPLAY, fontSize: 44, color: DIM, fontWeight: 600 }}>
           224 <span style={{ color: FAINT }}>×</span> 224 <span style={{ color: FAINT }}>×</span> 3
         </div>
-        <div style={{ fontFamily: FONT_DISPLAY, fontSize: 132, fontWeight: 800, color: AMBER, letterSpacing: -3, textShadow: `0 0 50px ${AMBER}55`, opacity: rise(t, T_150K - 0.6, 0.3) }}>
-          {fmtInt(150528 * ease.outCubic(prog(t, T_150K - 0.6, T_150K + 0.8)))}
+        <div style={{ fontFamily: FONT_DISPLAY, fontSize: lerp(132, 92, blend), fontWeight: 800, color: AMBER, letterSpacing: -3, textShadow: `0 0 50px ${AMBER}55`, opacity: Math.max(rise(t, T_150K - 0.6, 0.3), blend) }}>
+          {fmtInt(150528 * Math.max(ease.outCubic(prog(t, T_150K - 0.6, T_150K + 0.8)), blend))}
         </div>
         <div style={{ fontFamily: FONT_CN, fontSize: 32, color: IVORY, marginTop: 6 }}>个数字，组成一张小小的照片</div>
+        {play && (
+          <Panel style={{ marginTop: 28, padding: "20px 26px", width: 460, textAlign: "left", opacity: blend, pointerEvents: live ? "auto" : "none" }} glow={CORAL}>
+            <WorldSlider label="把猫向右挪" value={play.shift} min={0} max={12} step={1} unit={(v) => `${(v * 3.5).toFixed(0)} px`} onChange={(v) => set({ shift: v })} />
+            <WorldSlider label="换个光线（亮度）" value={play.gain} min={0.5} max={1.5} step={0.05} unit={(v) => `×${v.toFixed(2)}`} onChange={(v) => set({ gain: v })} />
+            <div style={{ display: "flex", alignItems: "baseline", gap: 12, marginTop: 6 }}>
+              <span style={{ fontFamily: FONT_DISPLAY, fontSize: 56, fontWeight: 800, color: CORAL }}>{(share * 100).toFixed(1)}%</span>
+              <span style={{ fontFamily: FONT_CN, fontSize: 22, color: IVORY }}>的数字变了（红色柱子）</span>
+            </div>
+          </Panel>
+        )}
       </div>
+      <ExploreTask zone={PIXELS} task="鼠标扫过这片“像素山脉”，看看每根柱子背后的数字" sub={["拖动画面旋转", "把猫挪几个像素，看多少柱子变红"]} goal="在山脉里找到猫的蓝眼睛（蓝色远大于红色的像素）" done={!!play?.found} />
     </AbsoluteFill>
   );
 };

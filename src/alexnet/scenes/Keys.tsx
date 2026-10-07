@@ -1,9 +1,12 @@
-import { useLayoutEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { AbsoluteFill, Img } from "remotion";
 import { Backdrop } from "../components/Frame";
 import { Show } from "../components/Show";
 import { Pose, Stage3D } from "../components/Stage3D";
+import { ExploreTask, WorldButton, WorldSlider } from "../components/ExploreUI";
+import { useExplore } from "../lib/explore";
+import { sfx } from "../lib/sfx";
 import { Body, Heading, Mono, Panel } from "../components/ui";
 import { ease, fmtInt, hash, lerp, prog, rise, wobble } from "../lib/anim";
 import { DATA, asset } from "../lib/data";
@@ -422,49 +425,135 @@ const Specialise = ({ t }: { t: number }) => {
 };
 
 /* ── k9: data augmentation ─────────────────────────────────────────────── */
+const AUGMENT = "augment";
+type Op = "crop" | "flip" | "color";
+type Variant = { cx: number; cy: number; flip: boolean; hue: number; bright: number; at: number };
+type AugPlay = { ops: Record<Op, boolean>; made: Variant[]; usedAll: boolean };
+const OPS: Array<[Op, string]> = [
+  ["crop", "✂ 随机裁剪"],
+  ["flip", "⇋ 水平翻转"],
+  ["color", "◐ 调整颜色"],
+];
+
 const Augment = ({ t }: { t: number }) => {
+  const ex = useExplore(AUGMENT);
+  const [play, setPlay] = useState<AugPlay | null>(null);
+  useEffect(() => {
+    if (ex.active && !play) setPlay({ ops: { crop: true, flip: false, color: false }, made: [], usedAll: false });
+    if (!ex.active && play) setPlay(null);
+  }, [ex.active, play]);
+  const live = !!play && ex.interactive;
+  const pb = ex.blend;
   const size = 480;
   const X = 180;
   const Y = 290;
   const crop = rise(t, T_CROP, 0.4);
   const ci = Math.floor(Math.max(0, t - T_CROP) * 2.2);
-  const cx = hash(ci * 3.1) * (size - size * 0.875);
-  const cy = hash(ci * 5.7) * (size - size * 0.875);
+  const last = play?.made[play.made.length - 1];
+  const cx = last ? last.cx : hash(ci * 3.1) * (size - size * 0.875);
+  const cy = last ? last.cy : hash(ci * 5.7) * (size - size * 0.875);
   const many = rise(t, T_2048 - 1.2, 0.6);
   const grid = 10;
+  const make = () => {
+    if (!play) return;
+    const r = () => Math.random();
+    const v: Variant = {
+      cx: play.ops.crop ? r() * size * 0.125 : size * 0.0625,
+      cy: play.ops.crop ? r() * size * 0.125 : size * 0.0625,
+      flip: play.ops.flip && r() > 0.5,
+      hue: play.ops.color ? (r() - 0.5) * 60 : 0,
+      bright: play.ops.color ? 0.7 + r() * 0.6 : 1,
+      at: ex.clock,
+    };
+    sfx.tick();
+    sfx.blip(700 + (play.made.length % 12) * 60, 0.07);
+    setPlay({ ...play, made: [...play.made, v], usedAll: play.usedAll || (play.ops.crop && play.ops.flip && play.ops.color) });
+  };
+  const variant = (i: number): Variant | null => {
+    if (play && pb > 0.5) return play.made[i] ?? null;
+    if (rise(t, T_CROP + 0.3 + i * (i < 10 ? 0.25 : 0.06), 0.3) <= 0) return null;
+    return { cx: size * 0.0625 + (hash(i * 3) - 0.5) * 50, cy: size * 0.0625 + (hash(i * 5) - 0.5) * 50, flip: t > T_FLIP && hash(i * 7) > 0.5, hue: t > T_JITTER ? (hash(i * 13) - 0.5) * 50 : 0, bright: t > T_JITTER ? 0.75 + hash(i * 17) * 0.5 : 1, at: -1 };
+  };
+  const combos = play ? (play.ops.crop ? 1024 : 1) * (play.ops.flip ? 2 : 1) : 2048;
   return (
     <AbsoluteFill>
-      <div style={{ position: "absolute", left: X, top: Y, width: size, height: size, borderRadius: 12, overflow: "hidden" }}>
+      <div
+        onClick={live ? make : undefined}
+        style={{ position: "absolute", left: X, top: Y, width: size, height: size, borderRadius: 12, overflow: "hidden", cursor: live ? "pointer" : undefined, boxShadow: live ? `0 0 0 2px ${AMBER}, 0 0 50px ${AMBER}44` : undefined }}
+      >
         <Img src={asset("cat.jpg")} style={{ width: "100%", height: "100%" }} />
-        <div style={{ position: "absolute", inset: 0, boxShadow: `inset 0 0 0 ${crop > 0 ? 0 : 0}px` }} />
-        {crop > 0 && <div style={{ position: "absolute", left: cx, top: cy, width: size * 0.875, height: size * 0.875, border: `3px solid ${AMBER}`, boxShadow: "0 0 0 2000px rgba(0,0,0,0.5)" }} />}
+        {crop > 0 && (
+          <div
+            style={{
+              position: "absolute",
+              left: cx,
+              top: cy,
+              width: size * 0.875,
+              height: size * 0.875,
+              border: `3px solid ${AMBER}`,
+              boxShadow: "0 0 0 2000px rgba(0,0,0,0.5)",
+              transition: play ? "left 0.18s, top 0.18s" : undefined,
+            }}
+          />
+        )}
       </div>
       <Mono at={{ x: X, y: Y + size + 20 }} size={16} color={AMBER} style={{ opacity: crop }}>
-        256×256 中随机裁出 224×224
+        {live ? "点击图片 · 按当前选中的方法生成一张新训练图" : "256×256 中随机裁出 224×224"}
       </Mono>
       {/* resulting variants */}
       <div style={{ position: "absolute", left: 760, top: Y - 20, display: "grid", gridTemplateColumns: `repeat(${grid}, 92px)`, gap: 8 }}>
         {Array.from({ length: grid * 5 }, (_, i) => {
-          const k = rise(t, T_CROP + 0.3 + i * (i < 10 ? 0.25 : 0.06), 0.3);
-          const flip = t > T_FLIP && hash(i * 7) > 0.5;
-          const jit = t > T_JITTER ? (hash(i * 13) - 0.5) * 50 : 0;
-          const bright = t > T_JITTER ? 0.75 + hash(i * 17) * 0.5 : 1;
+          const v = variant(i);
+          const fly = v && v.at >= 0 ? Math.min(1, (ex.clock - v.at) / 0.45) : 1;
+          const slotX = 760 + (i % grid) * 100;
+          const slotY = Y - 20 + Math.floor(i / grid) * 100;
+          const e = 1 - (1 - fly) ** 3;
           return (
-            <div key={i} style={{ width: 92, height: 92, borderRadius: 6, overflow: "hidden", opacity: k }}>
-              <Img
-                src={asset("cat.jpg")}
-                style={{ width: "100%", height: "100%", transform: `scale(1.15) translate(${(hash(i * 3) - 0.5) * 12}%, ${(hash(i * 5) - 0.5) * 12}%) scaleX(${flip ? -1 : 1})`, filter: `hue-rotate(${jit}deg) brightness(${bright})` }}
-              />
+            <div
+              key={i}
+              style={{
+                width: 92,
+                height: 92,
+                borderRadius: 6,
+                overflow: "hidden",
+                opacity: v ? 1 : play ? 0.12 : 0,
+                background: "rgba(255,255,255,0.05)",
+                transform: v && fly < 1 ? `translate(${(X + size / 2 - slotX - 46) * (1 - e)}px, ${(Y + size / 2 - slotY - 46) * (1 - e)}px) scale(${1 + 2.5 * (1 - e)})` : undefined,
+                boxShadow: v && fly < 1 ? `0 0 30px ${AMBER}` : undefined,
+              }}
+            >
+              {v && (
+                <Img
+                  src={asset("cat.jpg")}
+                  style={{ width: "100%", height: "100%", transform: `scale(1.14) translate(${(size * 0.0625 - v.cx) / 4.8}%, ${(size * 0.0625 - v.cy) / 4.8}%) scaleX(${v.flip ? -1 : 1})`, filter: `hue-rotate(${v.hue}deg) brightness(${v.bright})` }}
+                />
+              )}
             </div>
           );
         })}
       </div>
-      <div style={{ position: "absolute", left: 760, top: 830, display: "flex", gap: 30, fontFamily: FONT_CN, fontSize: 26, color: IVORY }}>
-        <span style={{ opacity: rise(t, T_CROP, 0.4) }}>✂ 随机裁剪</span>
-        <span style={{ opacity: rise(t, T_FLIP, 0.4) }}>⇋ 水平翻转</span>
-        <span style={{ opacity: rise(t, T_JITTER, 0.4) }}>◐ 调整颜色</span>
-        <span style={{ opacity: many, fontFamily: FONT_DISPLAY, fontWeight: 800, color: LIME, fontSize: 40, marginTop: -10 }}>× 2048</span>
-      </div>
+      {play ? (
+        <div style={{ position: "absolute", left: 760, top: 820, display: "flex", gap: 14, alignItems: "center", opacity: pb, pointerEvents: live ? "auto" : "none" }}>
+          {OPS.map(([op, name]) => (
+            <WorldButton key={op} on={play.ops[op]} onClick={() => setPlay({ ...play, ops: { ...play.ops, [op]: !play.ops[op] } })}>
+              {name}
+            </WorldButton>
+          ))}
+          <WorldButton on color={CYAN} onClick={make}>
+            ＋ 生成一张
+          </WorldButton>
+          <span style={{ fontFamily: FONT_DISPLAY, fontWeight: 800, color: LIME, fontSize: 36, marginLeft: 10 }}>{play.made.length}</span>
+          <span style={{ fontFamily: FONT_CN, fontSize: 20, color: DIM }}>张 · 裁剪 × 翻转可组合出 {combos.toLocaleString()} 种</span>
+        </div>
+      ) : (
+        <div style={{ position: "absolute", left: 760, top: 830, display: "flex", gap: 30, fontFamily: FONT_CN, fontSize: 26, color: IVORY }}>
+          <span style={{ opacity: rise(t, T_CROP, 0.4) }}>✂ 随机裁剪</span>
+          <span style={{ opacity: rise(t, T_FLIP, 0.4) }}>⇋ 水平翻转</span>
+          <span style={{ opacity: rise(t, T_JITTER, 0.4) }}>◐ 调整颜色</span>
+          <span style={{ opacity: many, fontFamily: FONT_DISPLAY, fontWeight: 800, color: LIME, fontSize: 40, marginTop: -10 }}>× 2048</span>
+        </div>
+      )}
+      <ExploreTask zone={AUGMENT} task="点击猫的照片，一张图变出一整批训练数据" sub={["打开 / 关闭不同的增强方法", "对网络来说，每张都是“新”图"]} goal="三种方法全部打开，生成 20 张训练图" done={!!play && play.usedAll && play.made.length >= 20} />
     </AbsoluteFill>
   );
 };
@@ -474,28 +563,57 @@ const DLAYERS = [5, 8, 8, 4];
 const DX = 260;
 const dNodes = DLAYERS.flatMap((n, l) => Array.from({ length: n }, (_, i) => ({ l, i, x: 960 + (l - 1.5) * DX, y: 540 + (i - (n - 1) / 2) * 76 })));
 
+const DROPOUT = "dropout";
+type DropPlay = { p: number; step: number; mask: boolean[]; auto: boolean; stepAt: number; seenHalf: number };
+const HIDDEN = dNodes.filter((n) => n.l === 1 || n.l === 2).length;
+const newMask = (p: number) => dNodes.map((n) => (n.l === 1 || n.l === 2) && Math.random() < p);
+
 const Dropout = ({ t }: { t: number }) => {
+  const ex = useExplore(DROPOUT);
+  const [play, setPlay] = useState<DropPlay | null>(null);
+  useEffect(() => {
+    if (ex.active && !play) setPlay({ p: 0.5, step: 0, mask: dNodes.map(() => false), auto: false, stepAt: 0, seenHalf: 0 });
+    if (!ex.active && play) setPlay(null);
+  }, [ex.active, play]);
+  const live = !!play && ex.interactive;
+  const pb = ex.blend;
+  const trainStep = (pl: DropPlay): DropPlay => {
+    sfx.tick();
+    sfx.blip(500 + Math.random() * 600, 0.06);
+    return { ...pl, step: pl.step + 1, mask: newMask(pl.p), stepAt: ex.clock, seenHalf: pl.seenHalf + (Math.abs(pl.p - 0.5) < 0.051 ? 1 : 0) };
+  };
+  useEffect(() => {
+    if (!live || !play?.auto || ex.clock - play.stepAt < 0.45) return;
+    setPlay(trainStep(play));
+  });
+
   const on = t >= T_REST - 0.2;
   const epoch = Math.floor(Math.max(0, t - (T_REST - 0.2)) / 0.55);
-  const dropped = (l: number, i: number) => on && (l === 1 || l === 2) && hash(epoch * 97 + l * 13 + i * 7) < 0.5;
-  const ens = ease.inOutCubic(prog(t, T_ENSEMBLE, T_ENSEMBLE + 1.2));
-  const merge = ease.inOutCubic(prog(t, T_MERGE - 0.4, T_MERGE + 0.8));
+  const dropped = (l: number, i: number) => {
+    if (play && pb > 0.5) return play.mask[dNodes.findIndex((n) => n.l === l && n.i === i)];
+    return on && (l === 1 || l === 2) && hash(epoch * 97 + l * 13 + i * 7) < 0.5;
+  };
+  const ens = ease.inOutCubic(prog(t, T_ENSEMBLE, T_ENSEMBLE + 1.2)) * (1 - pb);
+  const merge = ease.inOutCubic(prog(t, T_MERGE - 0.4, T_MERGE + 0.8)) * (1 - pb);
+  const pulse = play ? Math.exp(-(ex.clock - play.stepAt) / 0.25) : 0;
+  const active = play ? play.mask.filter((m, k) => !m && (dNodes[k].l === 1 || dNodes[k].l === 2)).length : HIDDEN;
   return (
     <AbsoluteFill>
-      <svg width={1920} height={1080} style={{ position: "absolute", inset: 0, opacity: 1 - ens * (1 - merge) }}>
+      {/* in the world the net slides down-left, clear of the task banner and the control panel */}
+      <svg width={1920} height={1080} style={{ position: "absolute", inset: 0, opacity: 1 - ens * (1 - merge), transform: `translate(${-120 * pb}px, ${60 * pb}px)` }}>
         {dNodes.map((a) =>
           dNodes
             .filter((b) => b.l === a.l + 1)
             .map((b) => {
               const off = (dropped(a.l, a.i) || dropped(b.l, b.i)) && merge < 0.5;
-              return <line key={`${a.l}${a.i}-${b.i}`} x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke={off ? "transparent" : CYAN} strokeOpacity={0.35} strokeWidth={1.5} />;
+              return <line key={`${a.l}${a.i}-${b.i}`} x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke={off ? "transparent" : CYAN} strokeOpacity={0.35 + pulse * 0.5} strokeWidth={1.5 + pulse} />;
             }),
         )}
         {dNodes.map((n) => {
           const off = dropped(n.l, n.i) && merge < 0.5;
           return (
             <g key={`${n.l}-${n.i}`}>
-              <circle cx={n.x} cy={n.y} r={22} fill={off ? "rgba(255,255,255,0.04)" : n.l === 0 ? CYAN : n.l === 3 ? AMBER : IVORY} stroke={off ? FAINT : "none"} strokeDasharray="4 4" opacity={off ? 1 : 0.9} />
+              <circle cx={n.x} cy={n.y} r={22 + (off ? 0 : pulse * 4)} fill={off ? "rgba(255,255,255,0.04)" : n.l === 0 ? CYAN : n.l === 3 ? AMBER : IVORY} stroke={off ? FAINT : "none"} strokeDasharray="4 4" opacity={off ? 1 : 0.9} />
               {off && <text x={n.x} y={n.y + 8} textAnchor="middle" fontSize={22} fill={CORAL} fontFamily={FONT_MONO}>×</text>}
             </g>
           );
@@ -514,12 +632,41 @@ const Dropout = ({ t }: { t: number }) => {
             </svg>
           );
         })}
-      <Heading size={52} at={{ x: 960, y: 160 }} center color={IVORY} style={{ opacity: rise(t, T_K10, 0.6) }}>
+      <Heading size={52} at={{ x: 960, y: 160 }} center color={IVORY} style={{ opacity: rise(t, T_K10, 0.6) * (1 - pb) }}>
         Dropout <span style={{ fontFamily: FONT_CN, fontSize: 30, color: DIM }}>随机让一半神经元“休息”</span>
       </Heading>
-      <Body size={30} at={{ x: 960, y: 900 }} center color={LIME} style={{ opacity: rise(t, T_ENSEMBLE, 0.6), whiteSpace: "nowrap" }}>
+      <Body size={30} at={{ x: 960, y: 900 }} center color={LIME} style={{ opacity: rise(t, T_ENSEMBLE, 0.6) * (1 - pb), whiteSpace: "nowrap" }}>
         {merge > 0.5 ? "合在一起：相当于许多网络的“集体智慧”" : "每次训练：一个不同的“瘦”网络"}
       </Body>
+      {play && (
+        <Panel at={{ x: 1380, y: 330 }} style={{ width: 460, padding: "22px 26px", opacity: pb, pointerEvents: live ? "auto" : "none" }} glow={CYAN}>
+          <WorldSlider label="丢弃率 p" value={play.p} min={0} max={0.9} step={0.05} unit={(v) => v.toFixed(2)} onChange={(v) => setPlay({ ...play, p: v })} color={CORAL} />
+          <div style={{ display: "flex", gap: 10 }}>
+            <WorldButton on color={CYAN} onClick={() => setPlay(trainStep(play))}>
+              训练一步
+            </WorldButton>
+            <WorldButton on={play.auto} onClick={() => setPlay({ ...play, auto: !play.auto })}>
+              {play.auto ? "暂停" : "自动训练"}
+            </WorldButton>
+          </div>
+          <div style={{ display: "flex", gap: 26, marginTop: 16, fontFamily: FONT_DISPLAY }}>
+            <div>
+              <div style={{ fontSize: 40, color: IVORY }}>{play.step}</div>
+              <div style={{ fontFamily: FONT_CN, fontSize: 17, color: DIM }}>训练步数</div>
+            </div>
+            <div>
+              <div style={{ fontSize: 40, color: CYAN }}>
+                {active}/{HIDDEN}
+              </div>
+              <div style={{ fontFamily: FONT_CN, fontSize: 17, color: DIM }}>这一步在工作的神经元</div>
+            </div>
+          </div>
+          <Body size={19} color={DIM} style={{ marginTop: 12 }}>
+            隐藏层 {HIDDEN} 个神经元，可能的“瘦”网络有 2<sup>{HIDDEN}</sup> = {(2 ** HIDDEN).toLocaleString()} 种
+          </Body>
+        </Panel>
+      )}
+      <ExploreTask zone={DROPOUT} task="每训练一步，都有一批神经元被随机“请去休息”" sub={["把 p 调到 0 和 0.9 试试", "每一步的网络都不一样"]} goal="用 p = 0.5 训练 10 步" done={!!play && play.seenHalf >= 10} />
     </AbsoluteFill>
   );
 };

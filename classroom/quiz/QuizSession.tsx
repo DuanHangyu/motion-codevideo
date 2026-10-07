@@ -31,7 +31,7 @@ export const QuizSession = ({ title, questionIds, isFinal, onClose, onReview, on
         <div className="big">
           {score}/{questions.length}
         </div>
-        <div style={{ color: "var(--dim)" }}>{score === questions.length ? "全部答对，太棒了！" : "答错的题可以回到对应片段，或去实验台再探索一下。"}</div>
+        <div style={{ color: "var(--dim)" }}>{score === questions.length ? "全部答对，太棒了！" : "答错的题可以回到对应片段，或走进画面再探索一下。"}</div>
         <div className="summary-nodes">
           {touched.map((id) => {
             const p = get(progress, id);
@@ -117,7 +117,7 @@ export const QuizSession = ({ title, questionIds, isFinal, onClose, onReview, on
       <div className="quiz-foot">
         {answered && !correct && (
           <button className="btn" onClick={() => onReview(q)}>
-            {q.review.lab ? "◆ 去实验台探索" : "↺ 回到讲解片段"}
+            {q.review.world ? "◆ 走进画面再探索" : "↺ 回到讲解片段"}
           </button>
         )}
         {answered && (

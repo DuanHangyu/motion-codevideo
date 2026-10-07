@@ -1,22 +1,31 @@
 import { describe, expect, it } from "vitest";
-import { CHECKPOINTS, ZONES, crossed, zoneAt } from "./zones";
+import { CHECKPOINTS, PREDICTIONS, crossed } from "./zones";
+import { WORLDS } from "../../src/alexnet/lib/worlds";
 import { LEARNABLE, nodeAt, watchedAt } from "../map/graph";
 import { QUESTIONS, questionById } from "../quiz/questions";
 import { DURATION_SEC } from "../../src/alexnet/lib/timeline";
 
-describe("explore zones", () => {
-  it("are ordered, non-overlapping and inside the lesson", () => {
-    ZONES.forEach((z, i) => {
-      expect(z.to).toBeGreaterThan(z.from);
-      if (i) expect(z.from).toBeGreaterThanOrEqual(ZONES[i - 1].to);
+describe("worlds", () => {
+  it("are ordered, non-overlapping, at least 3 s long and inside the lesson", () => {
+    WORLDS.forEach((w, i) => {
+      expect(w.to - w.from, w.id).toBeGreaterThan(3);
+      if (i) expect(w.from, w.id).toBeGreaterThanOrEqual(WORLDS[i - 1].to);
     });
-    expect(ZONES[ZONES.length - 1].to).toBeLessThan(DURATION_SEC);
+    expect(WORLDS[WORLDS.length - 1].to).toBeLessThan(DURATION_SEC);
   });
 
-  it("zoneAt finds the zone containing a time and nothing outside", () => {
-    const z = ZONES[2];
-    expect(zoneAt((z.from + z.to) / 2)?.lab).toBe(z.lab);
-    expect(zoneAt(0)).toBeUndefined();
+  it("count toward learnable nodes", () => {
+    const ids = new Set(LEARNABLE.map((n) => n.id));
+    WORLDS.forEach((w) => expect(ids.has(w.node), w.id).toBe(true));
+  });
+});
+
+describe("predictions", () => {
+  it("pause before they are revealed, with a valid answer", () => {
+    PREDICTIONS.forEach((p) => {
+      expect(p.reveal, p.id).toBeGreaterThan(p.at);
+      expect(p.answer).toBeLessThan(p.options.length);
+    });
   });
 });
 
