@@ -1,123 +1,100 @@
-import { useEffect, useState } from "react";
-import { Canvas } from "@react-three/fiber";
-import { Bloom, EffectComposer } from "@react-three/postprocessing";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { go, useRoute } from "../router";
 import { useProgress } from "../progress/store";
 import { Progress, STATUS_LABEL, Status, get, status } from "../progress/mastery";
+import { Icon, TopNav } from "../shell/TopNav";
 import { KnowledgeNode, LEARNABLE, TOPIC } from "./graph";
-import { CHAPTERS, Chapter, OPEN_CHAPTERS, SUBNODE_COUNT, TRACKS, chapterById } from "./universe";
-import { STATUS_COLOR, Universe3D, nodeStatus } from "./Universe3D";
+import { GraphApi, KnowledgeGraph } from "./KnowledgeGraph";
+import { STATUS_COLOR, STATUS_COLOR_LIGHT, nodeStatus } from "./status";
+import { CHAPTERS, Chapter, OPEN_CHAPTERS, SUBNODE_COUNT, TRACKS, TrackId, chapterById, chapterOf } from "./universe";
 
 export { STATUS_COLOR };
 
-/** Inside a chapter: its first learnable sub-node that is not mastered yet. */
+type Level = "default" | "chapters" | "all";
+
+/** Inside a chapter: its first learnable sub-topic that is not mastered yet. */
 const recommendNode = (p: Progress, c: Chapter) => c.children.find((n) => n.span && status(get(p, n.id)) !== "mastered") ?? null;
-/** In the universe: the first open chapter with work left; once all are done, the first chapter whose prerequisites are open. */
+/** Overall: the first open chapter with work left; once all are done, the first chapter whose prerequisites are open. */
 const recommendChapter = (p: Progress) =>
   OPEN_CHAPTERS.find((c) => recommendNode(p, c)) ?? CHAPTERS.find((c) => !c.lesson && c.needs.every((id) => chapterById(id)?.lesson)) ?? CHAPTERS[0];
 
-const titleOf = (c: Chapter, id: string) => c.children.find((n) => n.id === id)?.title ?? id;
-
-/* ── cards ───────────────────────────────────────────────────────────── */
-const NodeCard = ({ chapter, node, progress, onClose }: { chapter: Chapter; node: KnowledgeNode; progress: Progress; onClose: () => void }) => {
-  const st = nodeStatus(progress, node);
-  const p = get(progress, node.id);
-  if (st === "locked")
-    return (
-      <aside className="panel node-card">
-        <div className="mono" style={{ color: TRACKS[chapter.track].color }}>
-          {chapter.title} · {node.en}
-        </div>
-        <h2>{node.title}</h2>
-        <p className="goal">「{chapter.title}」的虚拟课堂还在制作中，这是它将要讲到的知识点之一。</p>
-        {node.needs.length > 0 && (
-          <div className="needs">
-            {node.needs.map((id) => (
-              <span key={id}>先修 · {titleOf(chapter, id)}</span>
-            ))}
-          </div>
-        )}
-        <div className="actions">
-          <button className="btn ghost small" onClick={onClose}>
-            ← 返回 {chapter.title}
-          </button>
-        </div>
-      </aside>
-    );
-  const mins = Math.round((node.span![1] - node.span![0]) / 60);
+/* ── side panel ──────────────────────────────────────────────────────── */
+const Overview = ({ progress, onPick }: { progress: Progress; onPick: (id: string) => void }) => {
+  const next = recommendChapter(progress);
+  const mastered = LEARNABLE.filter((n) => status(get(progress, n.id)) === "mastered").length;
+  const avg = LEARNABLE.reduce((s, n) => s + get(progress, n.id).score, 0) / LEARNABLE.length;
   return (
-    <aside className="panel node-card">
-      <div className="mono" style={{ color: STATUS_COLOR[st] }}>
-        {chapter.title} · {node.en}
-      </div>
-      <h2>{node.title}</h2>
-      <span className={`status-chip status-${st}`}>{STATUS_LABEL[st]}</span>
-      <p className="goal">学完你将能：{node.goal}</p>
-      <div className="row">
-        <span>掌握度</span>
-        <span>{Math.round(p.score * 100)}%</span>
-      </div>
-      <div className="meter">
-        <div style={{ width: `${p.score * 100}%`, background: STATUS_COLOR[st] }} />
-      </div>
-      <div className="row">
-        <span>课堂片段约 {Math.max(1, mins)} 分钟</span>
-        <span>
-          答题 {p.correct}/{p.answered}
-        </span>
-      </div>
-      {node.needs.length > 0 && (
-        <div className="needs">
-          {node.needs.map((id) => (
-            <span key={id}>先修 · {titleOf(chapter, id)}</span>
-          ))}
+    <>
+      <div className="kg-kicker">课程概览</div>
+      <h2>{TOPIC.title}</h2>
+      <p className="kg-desc">从 AlexNet 出发，沿视觉、序列、生成三条主线走到今天的大模型。点击大节点展开它的知识点，箭头上写着节点之间的关系。</p>
+      <div className="kg-stats">
+        <div>
+          <b>{CHAPTERS.length}</b>大节点
         </div>
-      )}
-      <div className="actions">
-        <button className="btn primary" onClick={() => go(`/lesson/${chapter.lesson}?node=${node.id}`)}>
-          {st === "new" ? "进入课堂" : st === "review" ? "去复习" : "继续学习"} →
-        </button>
-        <button className="btn ghost small" onClick={onClose}>
-          ← 返回 {chapter.title}
-        </button>
+        <div>
+          <b>{SUBNODE_COUNT}</b>知识点
+        </div>
+        <div>
+          <b className="ok">
+            {mastered}
+            <small>/{LEARNABLE.length}</small>
+          </b>
+          已掌握
+        </div>
+        <div>
+          <b>{Math.round(avg * 100)}%</b>掌握度
+        </div>
       </div>
-    </aside>
+      <div className="kg-sub">三条主线</div>
+      <div className="kg-tracks">
+        {(Object.keys(TRACKS) as TrackId[]).map((t) => (
+          <div key={t}>
+            <i style={{ background: TRACKS[t].color }} />
+            {TRACKS[t].title}
+            <span>{CHAPTERS.filter((c) => c.track === t).length} 个大节点</span>
+          </div>
+        ))}
+      </div>
+      <button className="lt-btn primary block" onClick={() => onPick(next.id)}>
+        {next.lesson ? `推荐从「${next.title}」开始` : `下一站：${next.title}`} →
+      </button>
+    </>
   );
 };
 
-const ChapterCard = ({ chapter, progress, onPickNode }: { chapter: Chapter; progress: Progress; onPickNode: (id: string) => void }) => {
-  const color = TRACKS[chapter.track].color;
+const ChapterPanel = ({ chapter, progress, expanded, onToggle, onPickTopic }: { chapter: Chapter; progress: Progress; expanded: boolean; onToggle: () => void; onPickTopic: (id: string) => void }) => {
   const next = recommendNode(progress, chapter);
   const learnable = chapter.children.filter((n) => n.span);
   const mastered = learnable.filter((n) => status(get(progress, n.id)) === "mastered").length;
   const started = learnable.some((n) => status(get(progress, n.id)) !== "new");
   return (
-    <aside className="panel node-card chapter-card" style={{ ["--track" as string]: color }}>
-      <div className="mono" style={{ color }}>
+    <>
+      <div className="kg-kicker" style={{ color: chapter.color }}>
         {TRACKS[chapter.track].title} · {chapter.year}
       </div>
       <h2>{chapter.title}</h2>
-      <p className="goal">{chapter.blurb}</p>
+      <p className="kg-desc">{chapter.blurb}</p>
       {chapter.needs.length > 0 && (
-        <div className="needs">
+        <div className="kg-chips">
           {chapter.needs.map((id) => (
             <button key={id} onClick={() => go(`/map/${id}`)}>
-              先修 · {chapterById(id)!.title}
+              {chapter.rel[id]} ← {chapterById(id)!.title}
             </button>
           ))}
         </div>
       )}
-      <div className="row">
-        <span>{chapter.children.length} 个子知识点</span>
-        <span>{chapter.lesson ? `已掌握 ${mastered}/${learnable.length}` : "课堂制作中"}</span>
+      <div className="kg-row">
+        <span>{chapter.children.length} 个知识点</span>
+        <span>{chapter.lesson ? `已掌握 ${mastered}/${learnable.length}` : "课堂筹备中"}</span>
       </div>
-      <ol className="topic-list">
+      <ol className="kg-topics">
         {chapter.children.map((n) => {
           const st = nodeStatus(progress, n);
           return (
             <li key={n.id}>
-              <button onClick={() => onPickNode(n.id)} className={st === "locked" ? "locked" : ""}>
-                <i style={{ background: st === "locked" ? "transparent" : STATUS_COLOR[st], borderColor: st === "locked" ? color : "transparent" }} />
+              <button onClick={() => onPickTopic(n.id)}>
+                <i style={{ background: st === "locked" ? "#e2e8f0" : STATUS_COLOR_LIGHT[st] }} />
                 {n.title}
                 {n.id === next?.id && <em>下一步</em>}
               </button>
@@ -125,151 +102,255 @@ const ChapterCard = ({ chapter, progress, onPickNode }: { chapter: Chapter; prog
           );
         })}
       </ol>
-      <div className="actions">
+      <div className="kg-actions">
         {chapter.lesson ? (
-          <button className="btn primary" onClick={() => go(next ? `/lesson/${chapter.lesson}?node=${next.id}` : `/lesson/${chapter.lesson}`)}>
-            {!next ? "▶ 再上一遍" : started ? `继续：${next.title}` : "▶ 进入虚拟课堂"} →
+          <button className="lt-btn primary" onClick={() => go(next ? `/lesson/${chapter.lesson}?node=${next.id}` : `/lesson/${chapter.lesson}`)}>
+            {!next ? "再上一遍" : started ? `继续：${next.title}` : "进入虚拟课堂"} →
           </button>
         ) : (
-          <button className="btn small" disabled>
-            课堂制作中
+          <button className="lt-btn" disabled>
+            课堂筹备中
           </button>
         )}
-        <button className="btn ghost small" onClick={() => go("/map")}>
-          ← 知识宇宙
+        <button className="lt-btn ghost" onClick={onToggle}>
+          {expanded ? "收起知识点" : "展开知识点"}
         </button>
       </div>
-    </aside>
+    </>
+  );
+};
+
+const TopicPanel = ({ chapter, node, progress, onBack }: { chapter: Chapter; node: KnowledgeNode; progress: Progress; onBack: () => void }) => {
+  const st = nodeStatus(progress, node);
+  const p = get(progress, node.id);
+  const title = (id: string) => chapter.children.find((n) => n.id === id)?.title ?? id;
+  return (
+    <>
+      <div className="kg-kicker" style={{ color: chapter.color }}>
+        {chapter.title} · {node.en}
+      </div>
+      <h2>{node.title}</h2>
+      {st === "locked" ? (
+        <p className="kg-desc">「{chapter.title}」的虚拟课堂还在筹备中，这是它将要讲到的知识点之一。</p>
+      ) : (
+        <>
+          <span className="kg-status" style={{ ["--c" as string]: STATUS_COLOR_LIGHT[st] }}>
+            {STATUS_LABEL[st]}
+          </span>
+          <p className="kg-desc">学完你将能：{node.goal}</p>
+          <div className="kg-row">
+            <span>掌握度</span>
+            <span>{Math.round(p.score * 100)}%</span>
+          </div>
+          <div className="kg-meter">
+            <div style={{ width: `${p.score * 100}%`, background: STATUS_COLOR_LIGHT[st] }} />
+          </div>
+          <div className="kg-row">
+            <span>课堂片段约 {Math.max(1, Math.round((node.span![1] - node.span![0]) / 60))} 分钟</span>
+            <span>
+              答题 {p.correct}/{p.answered}
+            </span>
+          </div>
+        </>
+      )}
+      {node.needs.length > 0 && (
+        <div className="kg-chips static">
+          {node.needs.map((id) => (
+            <span key={id}>先修 · {title(id)}</span>
+          ))}
+        </div>
+      )}
+      <div className="kg-actions">
+        {st !== "locked" && (
+          <button className="lt-btn primary" onClick={() => go(`/lesson/${chapter.lesson}?node=${node.id}`)}>
+            {st === "new" ? "进入课堂" : st === "review" ? "去复习" : "继续学习"} →
+          </button>
+        )}
+        <button className="lt-btn ghost" onClick={onBack}>
+          ← 返回 {chapter.title}
+        </button>
+      </div>
+    </>
   );
 };
 
 /* ── page ────────────────────────────────────────────────────────────── */
 export const MapPage = () => {
   const route = useRoute();
-  const focus = chapterById(route.path[1]);
+  const focusChapter = chapterById(route.path[1]);
   const progress = useProgress();
-  const [selected, setSelected] = useState<string | null>(null);
-  useEffect(() => setSelected(null), [focus]);
+  const api = useRef<GraphApi>(null);
 
+  const [expanded, setExpanded] = useState<Set<string>>(() => new Set(focusChapter ? [focusChapter.id] : []));
+  const [level, setLevel] = useState<Level>("default");
+  const [query, setQuery] = useState("");
+  const [tracks, setTracks] = useState<Set<TrackId>>(() => new Set(Object.keys(TRACKS) as TrackId[]));
+  const [openOnly, setOpenOnly] = useState(false);
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [topic, setTopic] = useState<string | null>(null);
+
+  const shownExpanded = useMemo(() => (level === "chapters" ? new Set<string>() : level === "all" ? new Set(CHAPTERS.map((c) => c.id)) : expanded), [level, expanded]);
+  const visible = useCallback((c: Chapter) => tracks.has(c.track) && (!openOnly || !!c.lesson), [tracks, openOnly]);
+
+  // the route names the selected chapter; make sure it is shown and opened
+  useEffect(() => {
+    setTopic(null);
+    if (!focusChapter) return;
+    setExpanded((e) => (e.has(focusChapter.id) ? e : new Set(e).add(focusChapter.id)));
+    const id = window.setTimeout(() => api.current?.focus(focusChapter.id), 1300);
+    return () => window.clearTimeout(id);
+  }, [focusChapter]);
+
+  // searching a topic of a closed chapter opens that chapter
+  useEffect(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return;
+    const hit = CHAPTERS.flatMap((c) => c.children).find((n) => n.title.toLowerCase().includes(q) || n.en.toLowerCase().includes(q));
+    const c = hit && chapterOf(hit.id);
+    if (c && !expanded.has(c.id)) setExpanded((e) => new Set(e).add(c.id));
+  }, [query, expanded]);
+
+  const pick = (id: string, kind: "chapter" | "topic") => {
+    if (kind === "chapter") {
+      if (focusChapter?.id === id) {
+        setTopic(null);
+        if (level === "default") setExpanded((e) => new Set(e).add(id));
+        return;
+      }
+      return go(`/map/${id}`);
+    }
+    const c = chapterOf(id)!;
+    if (focusChapter?.id !== c.id) go(`/map/${c.id}`);
+    window.setTimeout(() => setTopic(id), 0);
+  };
+  const toggle = (id: string) => {
+    setLevel("default");
+    setExpanded((e) => {
+      const n = new Set(e);
+      if (n.has(id)) n.delete(id);
+      else n.add(id);
+      return n;
+    });
+  };
+
+  const topicNode = focusChapter && topic ? focusChapter.children.find((n) => n.id === topic) : undefined;
   const nextChapter = recommendChapter(progress);
-  const nextNode = focus ? recommendNode(progress, focus) : null;
-  const mastered = LEARNABLE.filter((n) => status(get(progress, n.id)) === "mastered").length;
-  const avg = LEARNABLE.reduce((s, n) => s + get(progress, n.id).score, 0) / LEARNABLE.length;
-  const selectedNode = focus && selected ? focus.children.find((n) => n.id === selected) : undefined;
+  const recommended = focusChapter ? recommendNode(progress, focusChapter)?.id ?? null : nextChapter.id;
+  const searchHits = query.trim() ? CHAPTERS.flatMap((c) => [c, ...c.children]).filter((n) => n.title.toLowerCase().includes(query.trim().toLowerCase())).length : 0;
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
-      if (selected) setSelected(null);
-      else if (focus) go("/map");
+      if (e.key !== "Escape" || e.target instanceof HTMLInputElement) return;
+      if (topic) setTopic(null);
+      else if (focusChapter) go("/map");
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [selected, focus]);
+  }, [topic, focusChapter]);
 
   return (
-    <main className={`map${focus ? " focused" : ""}`}>
-      <div className="map-canvas">
-        <Canvas camera={{ position: [0, 160, 90], fov: 42, near: 0.1, far: 900 }} dpr={[1, 2]} onPointerMissed={() => setSelected(null)}>
-          <color attach="background" args={["#020309"]} />
-          <Universe3D
-            focus={focus}
-            selected={selected}
-            progress={progress}
-            recommendedChapter={nextChapter.id}
-            recommendedNode={nextNode?.id ?? null}
-            onPickChapter={(id) => go(`/map/${id}`)}
-            onPickNode={setSelected}
-          />
-          <EffectComposer multisampling={0}>
-            <Bloom intensity={1.15} luminanceThreshold={0.32} luminanceSmoothing={0.4} mipmapBlur />
-          </EffectComposer>
-        </Canvas>
-      </div>
-
-      <header className="topbar">
-        <button className="brand" onClick={() => go("/")}>
-          知识<span>宇宙</span>
-        </button>
-        <span className="crumb">
-          <button className="crumb-link" onClick={() => go("/map")}>
-            {TOPIC.title}
-          </button>
-          {focus && (
-            <>
-              {" "}
-              › <b>{focus.title}</b>
-            </>
-          )}
-          {selectedNode && <> › {selectedNode.title}</>}
-        </span>
-        <span className="spacer" />
-        {focus ? (
-          <button className="btn ghost small" onClick={() => go("/map")}>
-            ← 返回星系 <kbd>Esc</kbd>
-          </button>
-        ) : (
-          <button className="btn primary small" onClick={() => go(`/map/${nextChapter.id}`)}>
-            {nextChapter.lesson ? `飞往 ${nextChapter.title} →` : `下一站：${nextChapter.title}`}
-          </button>
+    <main className="light kg-page">
+      <TopNav>
+        <button onClick={() => go("/map")}>{TOPIC.title}</button>
+        {focusChapter && (
+          <>
+            <i>/</i>
+            <button onClick={() => setTopic(null)}>{focusChapter.title}</button>
+          </>
         )}
-      </header>
+        {topicNode && (
+          <>
+            <i>/</i>
+            <b>{topicNode.title}</b>
+          </>
+        )}
+      </TopNav>
 
-      {!focus && (
-        <div className="map-title">
-          <div className="mono">KNOWLEDGE UNIVERSE</div>
-          <h1>{TOPIC.title}</h1>
-          <p>
-            从 AlexNet 出发，三条旋臂通向今天的人工智能。
-            <br />
-            每颗恒星是一个改变了这门学科的模型或思想，环绕它的行星是要掌握的知识点。
-          </p>
-          <div className="map-stats">
-            <div>
-              <b>{CHAPTERS.length}</b>颗恒星
-            </div>
-            <div>
-              <b>{SUBNODE_COUNT}</b>颗行星
-            </div>
-            <div>
-              <b style={{ color: "#a8ff60" }}>
-                {mastered}
-                <small>/{LEARNABLE.length}</small>
-              </b>
-              已点亮
-            </div>
-            <div>
-              <b>{Math.round(avg * 100)}%</b>掌握度
-            </div>
-          </div>
-          <div className="arms">
-            {Object.values(TRACKS).map((t) => (
-              <div key={t.en} style={{ ["--track" as string]: t.color }}>
-                <i />
-                <span>{t.en}</span>
-                {t.title}
-              </div>
-            ))}
-          </div>
+      <div className="kg-wrap">
+        <div className="kg-title">
+          <h1>知识图谱</h1>
+          <p>可视化知识结构，助力高效学习</p>
         </div>
-      )}
 
-      {focus && !selectedNode && <ChapterCard key={focus.id} chapter={focus} progress={progress} onPickNode={setSelected} />}
-      {focus && selectedNode && <NodeCard key={selectedNode.id} chapter={focus} node={selectedNode} progress={progress} onClose={() => setSelected(null)} />}
+        <div className="kg-body">
+          <section className="kg-card">
+            <div className="kg-toolbar">
+              <label className="kg-search">
+                {Icon.search}
+                <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="搜索知识点…" onKeyDown={(e) => e.key === "Escape" && setQuery("")} />
+                {query && <span className="hits">{searchHits} 个结果</span>}
+              </label>
+              <div className="kg-filter">
+                <button className={`kg-tool${filterOpen || openOnly || tracks.size < 3 ? " on" : ""}`} onClick={() => setFilterOpen((o) => !o)}>
+                  {Icon.filter} 筛选
+                </button>
+                {filterOpen && (
+                  <div className="kg-pop" onMouseLeave={() => setFilterOpen(false)}>
+                    <div className="kg-sub">主线</div>
+                    {(Object.keys(TRACKS) as TrackId[]).map((t) => (
+                      <label key={t}>
+                        <input
+                          type="checkbox"
+                          checked={tracks.has(t)}
+                          onChange={() =>
+                            setTracks((s) => {
+                              const n = new Set(s);
+                              if (n.has(t)) n.delete(t);
+                              else n.add(t);
+                              // keep the course's starting point reachable
+                              return n.size ? n : s;
+                            })
+                          }
+                        />
+                        <i style={{ background: TRACKS[t].color }} />
+                        {TRACKS[t].title}
+                      </label>
+                    ))}
+                    <div className="kg-sub">课堂</div>
+                    <label>
+                      <input type="checkbox" checked={openOnly} onChange={() => setOpenOnly((v) => !v)} />
+                      只看已开放的课堂
+                    </label>
+                  </div>
+                )}
+              </div>
+              <select className="kg-tool" value={level} onChange={(e) => setLevel(e.target.value as Level)}>
+                <option value="default">全部层级</option>
+                <option value="chapters">只看大节点</option>
+                <option value="all">展开全部知识点</option>
+              </select>
+            </div>
 
-      <div className="legend">
-        {focus &&
-          (Object.keys(STATUS_LABEL) as Status[]).map((st) => (
-            <span key={st} className="legend-dot" style={{ ["--c" as string]: STATUS_COLOR[st] }}>
-              {STATUS_LABEL[st]}
-            </span>
-          ))}
-        {focus && (
-          <span className="legend-dot" style={{ ["--c" as string]: TRACKS[focus.track].color, opacity: 0.6 }}>
-            筹备中
-          </span>
-        )}
-        <span className="hint">{focus ? "点击行星查看 · 拖动环绕 · Esc 返回星系" : "悬停恒星看它的来路 · 点击飞入 · 拖动环绕 · 滚轮缩放"}</span>
+            <div className="kg-zoom">
+              <button onClick={() => api.current?.zoomBy(1.25)} aria-label="放大">
+                {Icon.plus}
+              </button>
+              <button onClick={() => api.current?.zoomBy(0.8)} aria-label="缩小">
+                {Icon.minus}
+              </button>
+              <button onClick={() => api.current?.fit()} aria-label="适应画布">
+                {Icon.fit}
+              </button>
+            </div>
+
+            <KnowledgeGraph ref={api} progress={progress} expanded={shownExpanded} visible={visible} query={query} selected={topic ?? focusChapter?.id ?? null} recommended={recommended} onPick={pick} />
+
+            <div className="kg-legend">
+              {(Object.keys(STATUS_LABEL) as Status[]).map((s) => (
+                <span key={s} style={{ ["--c" as string]: STATUS_COLOR_LIGHT[s] }}>
+                  {STATUS_LABEL[s]}
+                </span>
+              ))}
+              <span className="hint">拖动画布平移 · 滚轮缩放 · 拖动节点重新摆放</span>
+            </div>
+          </section>
+
+          <aside className="kg-side">
+            {!focusChapter && <Overview progress={progress} onPick={(id) => go(`/map/${id}`)} />}
+            {focusChapter && !topicNode && <ChapterPanel key={focusChapter.id} chapter={focusChapter} progress={progress} expanded={shownExpanded.has(focusChapter.id)} onToggle={() => toggle(focusChapter.id)} onPickTopic={(id) => pick(id, "topic")} />}
+            {focusChapter && topicNode && <TopicPanel key={topicNode.id} chapter={focusChapter} node={topicNode} progress={progress} onBack={() => setTopic(null)} />}
+          </aside>
+        </div>
       </div>
     </main>
   );

@@ -9,7 +9,7 @@ import { go } from "../router";
 import { useProgress, progress as store } from "../progress/store";
 import { STATUS_LABEL, get, status } from "../progress/mastery";
 import { LEARNABLE, TOPIC, nodeAt, nodeById, watchedAt } from "../map/graph";
-import { STATUS_COLOR } from "../map/MapPage";
+import { STATUS_COLOR } from "../map/status";
 import { QuizSession } from "../quiz/QuizSession";
 import { CHECKPOINTS, Checkpoint, PREDICTIONS, Prediction, crossed, steppedOver } from "./zones";
 import { LessonTimeline } from "./LessonTimeline";
@@ -208,10 +208,10 @@ export const LessonPage = ({ query }: { query: URLSearchParams }) => {
     <main className={`lesson${exploring ? " exploring" : ""}${sideOpen ? "" : " side-closed"}`}>
       <header className="topbar">
         <button className="brand" onClick={() => go("/")}>
-          知识<span>宇宙</span>
+          PolyPilot<span> Learning</span>
         </button>
         <button className="btn ghost small" onClick={() => go(`/map/${TOPIC.chapter}`)}>
-          ← 知识地图
+          ← 知识图谱
         </button>
         <span className="crumb">
           {TOPIC.title} › {TOPIC.chapterTitle} · <b>{TOPIC.lessonTitle}</b>

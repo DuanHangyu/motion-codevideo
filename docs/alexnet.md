@@ -78,7 +78,7 @@ npm run classroom:build  # 产出 out/classroom/
 | 目录 | 内容 |
 |---|---|
 | `classroom/home` | 首页：输入学习目标 |
-| `classroom/map` | 知识宇宙：`universe.ts` 定义 11 个大节点（恒星，沿视觉 / 序列 / 生成三条旋臂分布）及其子知识点（行星）；`graph.ts` 是 AlexNet 的 10 个子知识点与课程片段；`Galaxy.tsx` 星系背景，`Universe3D.tsx` 恒星、行星与镜头 |
+| `classroom/map` | 知识图谱：`universe.ts` 定义 11 个大节点（视觉 / 序列 / 生成三条主线）、节点间关系与各自的子知识点；`graph.ts` 是 AlexNet 的 10 个子知识点与课程片段；`KnowledgeGraph.tsx` 是 d3-force 布局的二维关系图（拖动、缩放、搜索、筛选、展开） |
 | `classroom/lesson` | 课堂页：播放器、时间轴、进入/离开画面世界；`zones.ts` 定义 6 次“先猜后看”和 4 组测验点 |
 | `classroom/quiz` | 16 道题（含“预测特征图”题）与答题流程，错题可直接回到对应的画面世界 |
 | `classroom/progress` | 掌握度模型（纯函数）与 localStorage 存储 |
@@ -97,6 +97,6 @@ npm run classroom:build  # 产出 out/classroom/
 
 快捷键：空格 播放/暂停（探索中＝继续听讲），`E` 走进画面，`Esc` 退出探索，`←` `→` ±5 秒。
 
-地图深链：`#/map` 星系全景，`#/map/alexnet` 直接飞入某个大节点。
+地图深链：`#/map` 全部大节点，`#/map/alexnet` 选中并展开某个大节点。
 
 课堂深链：`#/lesson/alexnet?node=conv` 从某个节点开始；`?world=conv-slide` 直接走进某个画面世界；`?t=326` 跳到指定秒数。

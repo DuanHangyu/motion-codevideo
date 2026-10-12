@@ -16,32 +16,22 @@ export type Chapter = {
   blurb: string;
   track: TrackId;
   needs: string[];
-  /** how far out along its track's spiral arm, 0 = the galactic core … 1 = the rim */
-  along: number;
+  /** relation shown on the arrow from each prerequisite, keyed by prerequisite id */
+  rel: Record<string, string>;
+  /** distinct node colour on the graph */
+  color: string;
   /** sub-nodes; their `pos` is local to the chapter */
   children: KnowledgeNode[];
   /** lesson route id when a virtual lesson exists */
   lesson?: string;
 };
 
-/** Each track is one spiral arm of the galaxy; `phase` is the angle (radians) at which the arm leaves the core. */
-export const TRACKS: Record<TrackId, { title: string; en: string; color: string; phase: number }> = {
-  vision: { title: "视觉 · 卷积网络", en: "VISION", color: "#ffb547", phase: 0.35 },
-  sequence: { title: "序列 · 语言", en: "SEQUENCE", color: "#3ce0ff", phase: 0.35 + (Math.PI * 2) / 3 },
-  generative: { title: "生成", en: "GENERATIVE", color: "#b28cff", phase: 0.35 + (Math.PI * 4) / 3 },
+/** Learning tracks; colours are the light-theme node colours on the knowledge graph. */
+export const TRACKS: Record<TrackId, { title: string; en: string; color: string }> = {
+  vision: { title: "视觉 · 卷积网络", en: "VISION", color: "#3b82f6" },
+  sequence: { title: "序列 · 语言", en: "SEQUENCE", color: "#14b8a6" },
+  generative: { title: "生成", en: "GENERATIVE", color: "#a855f7" },
 };
-
-/* galaxy geometry: arms are spirals r(u) = R0 + (R1 − R0)·u, θ(u) = phase + WIND·u, lying in the x–z plane */
-export const GALAXY = { R0: 3.2, R1: 31, WIND: 3.9 };
-export const armRadius = (u: number) => GALAXY.R0 + (GALAXY.R1 - GALAXY.R0) * u;
-export const armAngle = (phase: number, u: number) => phase + GALAXY.WIND * u;
-export const armPoint = (phase: number, u: number): [number, number, number] => {
-  const r = armRadius(u);
-  const a = armAngle(phase, u);
-  return [Math.cos(a) * r, 0, Math.sin(a) * r];
-};
-/** World position of a big node: AlexNet is the core; every other star sits on its arm. */
-export const chapterPos = (c: Chapter): [number, number, number] => (c.along === 0 ? [0, 0, 0] : armPoint(TRACKS[c.track].phase, c.along));
 
 /** Planned sub-topics of a chapter without a lesson: a gently zig-zagging chain, each step needing the previous one. */
 const planned = (chapter: string, topics: Array<[string, string]>): KnowledgeNode[] =>
@@ -51,7 +41,7 @@ const planned = (chapter: string, topics: Array<[string, string]>): KnowledgeNod
     en,
     goal: "",
     needs: i ? [`${chapter}-${i - 1}`] : [],
-    pos: [(i - (topics.length - 1) / 2) * 5.2, i % 2 ? -2 : 2, 0],
+    pos: [0, 0, 0],
   }));
 
 export const CHAPTERS: Chapter[] = [
@@ -63,7 +53,8 @@ export const CHAPTERS: Chapter[] = [
     blurb: "深度学习的起点：第一次让机器从数据里自己学会“看”，ImageNet 错误率一夜下降 10 个百分点。",
     track: "vision",
     needs: [],
-    along: 0,
+    rel: {},
+    color: "#3b82f6",
     children: NODES,
     lesson: "alexnet",
   },
@@ -75,7 +66,8 @@ export const CHAPTERS: Chapter[] = [
     blurb: "只用 3×3 小卷积核一层层堆深：简单的结构，证明“深度”本身就是力量。",
     track: "vision",
     needs: ["alexnet"],
-    along: 0.26,
+    rel: { alexnet: "加深网络" },
+    color: "#f97316",
     children: planned("vgg", [
       ["3×3 小卷积核", "SMALL KERNELS"],
       ["感受野的叠加", "RECEPTIVE FIELD"],
@@ -91,7 +83,8 @@ export const CHAPTERS: Chapter[] = [
     blurb: "让网络自己选尺度：Inception 模块并行多种卷积，用 1×1 卷积把计算量压下来。",
     track: "vision",
     needs: ["alexnet"],
-    along: 0.44,
+    rel: { alexnet: "多尺度改进" },
+    color: "#22c55e",
     children: planned("googlenet", [
       ["1×1 卷积", "1×1 CONV"],
       ["Inception 模块", "INCEPTION"],
@@ -108,7 +101,8 @@ export const CHAPTERS: Chapter[] = [
     blurb: "加一条“抄近路”的连接，网络从 20 层一下深到 152 层，还更好训练。",
     track: "vision",
     needs: ["vgg", "googlenet"],
-    along: 0.64,
+    rel: { vgg: "更深", googlenet: "结构改进" },
+    color: "#8b5cf6",
     children: planned("resnet", [
       ["退化问题", "DEGRADATION"],
       ["残差连接", "SKIP CONNECTION"],
@@ -125,7 +119,8 @@ export const CHAPTERS: Chapter[] = [
     blurb: "把图片切成小块当成“单词”，不用卷积也能看懂图像。",
     track: "vision",
     needs: ["resnet", "transformer"],
-    along: 0.9,
+    rel: { resnet: "替代卷积", transformer: "用于视觉" },
+    color: "#ec4899",
     children: planned("vit", [
       ["图像切块", "PATCHES"],
       ["块嵌入与位置", "PATCH EMBEDDING"],
@@ -141,7 +136,8 @@ export const CHAPTERS: Chapter[] = [
     blurb: "给网络加上“记忆”，让它能读句子、听语音——一次只看一个词，把前文装进隐藏状态。",
     track: "sequence",
     needs: ["alexnet"],
-    along: 0.28,
+    rel: { alexnet: "从图像到序列" },
+    color: "#14b8a6",
     children: planned("rnn", [
       ["序列与时间步", "SEQUENCES"],
       ["隐藏状态", "HIDDEN STATE"],
@@ -158,7 +154,8 @@ export const CHAPTERS: Chapter[] = [
     blurb: "翻译每个词时，回头去“看”原句里最相关的部分，而不是只靠一个压缩的记忆。",
     track: "sequence",
     needs: ["rnn"],
-    along: 0.5,
+    rel: { rnn: "解决记忆瓶颈" },
+    color: "#eab308",
     children: planned("attention", [
       ["Seq2Seq 的瓶颈", "BOTTLENECK"],
       ["对齐与加权求和", "ALIGNMENT"],
@@ -174,7 +171,8 @@ export const CHAPTERS: Chapter[] = [
     blurb: "“注意力就是你所需要的一切”：扔掉循环，所有词同时互相看，训练可以大规模并行。",
     track: "sequence",
     needs: ["attention", "resnet"],
-    along: 0.7,
+    rel: { attention: "完全基于", resnet: "残差连接" },
+    color: "#0ea5e9",
     children: planned("transformer", [
       ["多头注意力", "MULTI-HEAD"],
       ["位置编码", "POSITIONAL"],
@@ -191,7 +189,8 @@ export const CHAPTERS: Chapter[] = [
     blurb: "只做一件事——预测下一个词，但把模型和数据放大一万倍，能力开始“涌现”。",
     track: "sequence",
     needs: ["transformer"],
-    along: 0.93,
+    rel: { transformer: "规模化" },
+    color: "#6366f1",
     children: planned("llm", [
       ["词元与嵌入", "TOKENS"],
       ["下一词预测预训练", "PRETRAINING"],
@@ -208,7 +207,8 @@ export const CHAPTERS: Chapter[] = [
     blurb: "不只认图，还要画图：自编码器学会压缩，GAN 让两个网络互相较劲。",
     track: "generative",
     needs: ["alexnet"],
-    along: 0.36,
+    rel: { alexnet: "从识别到生成" },
+    color: "#f43f5e",
     children: planned("generative", [
       ["自编码器", "AUTOENCODER"],
       ["变分自编码器与潜空间", "VAE"],
@@ -224,7 +224,8 @@ export const CHAPTERS: Chapter[] = [
     blurb: "从一团噪声开始，一步步去噪“雕刻”出图像——今天文生图的核心。",
     track: "generative",
     needs: ["generative", "resnet"],
-    along: 0.74,
+    rel: { generative: "新的生成方式", resnet: "U-Net 骨干" },
+    color: "#d946ef",
     children: planned("diffusion", [
       ["加噪与去噪", "NOISING"],
       ["去噪网络 U-Net", "U-NET"],
@@ -241,3 +242,20 @@ export const chapterOf = (nodeId: string) => CHAPTERS.find((c) => c.children.som
 
 export const OPEN_CHAPTERS = CHAPTERS.filter((c) => c.lesson);
 export const SUBNODE_COUNT = CHAPTERS.reduce((s, c) => s + c.children.length, 0);
+
+/** Relations between the AlexNet sub-topics (prerequisite → topic). */
+const SUB_REL: Record<string, string> = {
+  "pixels>features": "从像素提取",
+  "neuron>descent": "如何学习",
+  "features>conv": "让网络自己学",
+  "descent>conv": "训练卷积核",
+  "descent>activation": "梯度要流动",
+  "conv>pooling": "逐层压缩",
+  "activation>pooling": "逐层堆叠",
+  "pooling>arch": "组成网络",
+  "arch>training": "训练它",
+  "arch>paradigm": "带来改变",
+  "training>paradigm": "规模效应",
+};
+/** Label for the arrow from sub-topic `from` to sub-topic `to`. */
+export const subRel = (from: string, to: string) => SUB_REL[`${from}>${to}`] ?? "下一步";
