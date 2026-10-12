@@ -14,6 +14,17 @@ import { QuizSession } from "../quiz/QuizSession";
 import { CHECKPOINTS, Checkpoint, PREDICTIONS, Prediction, crossed, steppedOver } from "./zones";
 import { LessonTimeline } from "./LessonTimeline";
 import { PredictCard, PredictResult } from "./Predict";
+import { LessonChat } from "./TutorPanel";
+
+const PREVIEWS = {
+  pixels: new URL("../../docs/images/alexnet/prologue.jpg", import.meta.url).href,
+  features: new URL("../../docs/images/alexnet/features.jpg", import.meta.url).href,
+  conv: new URL("../../docs/images/alexnet/convolution.jpg", import.meta.url).href,
+  activation: new URL("../../docs/images/alexnet/relu.jpg", import.meta.url).href,
+  arch: new URL("../../docs/images/alexnet/architecture.jpg", import.meta.url).href,
+  training: new URL("../../docs/images/alexnet/training.jpg", import.meta.url).href,
+};
+const nodePreview = (id: string) => PREVIEWS[id as keyof typeof PREVIEWS] ?? PREVIEWS.features;
 
 const fmt = (s: number) => `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
 const toFrame = (t: number) => Math.min(DURATION - 1, Math.max(0, Math.round(t * FPS)));
@@ -32,6 +43,7 @@ export const LessonPage = ({ query }: { query: URLSearchParams }) => {
   const [guesses, setGuesses] = useState<Guess[]>([]);
   const [done, setDone] = useState<Set<string>>(() => new Set());
   const [sideOpen, setSideOpen] = useState(true);
+  const [chatOpen, setChatOpen] = useState(true);
   const progress = useProgress();
   const blocking = useRef(false);
 
@@ -175,7 +187,7 @@ export const LessonPage = ({ query }: { query: URLSearchParams }) => {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLInputElement) return;
+      if (e.target instanceof HTMLElement && e.target.closest('input, textarea, select, [contenteditable="true"]')) return;
       if (overlay) return;
       if (exploring) {
         if (e.code === "Space") {
@@ -196,7 +208,8 @@ export const LessonPage = ({ query }: { query: URLSearchParams }) => {
     return () => window.removeEventListener("keydown", onKey);
   });
 
-  const current = nodeAt(t);
+  // Seeking rounds to a frame; allow one frame at a segment boundary.
+  const current = nodeAt(t + 1 / FPS);
   const chapter = sceneAt(t);
   const shownGuess = guesses.find((g) => {
     const p = predictionById(g.id);
@@ -205,7 +218,7 @@ export const LessonPage = ({ query }: { query: URLSearchParams }) => {
   const completedWorlds = WORLDS.filter((w) => explore.isCompleted(w.id)).length;
 
   return (
-    <main className={`lesson lt-lesson${exploring ? " exploring" : ""}${sideOpen ? "" : " side-closed"}`}>
+    <main className={`lesson lt-lesson lesson-workspace${exploring ? " exploring" : ""}${sideOpen ? "" : " side-closed"}${chatOpen ? "" : " chat-closed"}`}>
       <header className="topbar">
         <button className="brand" onClick={() => go("/")}>
           PolyPilot<span> Learning</span>
@@ -247,7 +260,7 @@ export const LessonPage = ({ query }: { query: URLSearchParams }) => {
                 <div className="mono" style={{ color: "var(--amber)" }}>
                   虚拟课堂 · {fmt(DURATION_SEC)}
                 </div>
-                <h2>{node ? `从「${nodeById(node).title}」开始` : TOPIC.lessonTitle}</h2>
+                <h2>{current ? `从「${current.title}」开始` : TOPIC.lessonTitle}</h2>
                 <p>
                   {WORLDS.length} 处画面可以暂停、走进去动手 · {PREDICTIONS.length} 次先猜后看 · {CHECKPOINTS.length} 组小测
                 </p>
@@ -301,24 +314,25 @@ export const LessonPage = ({ query }: { query: URLSearchParams }) => {
 
       {!sideOpen && !exploring && (
         <button className="side-open" onClick={() => setSideOpen(true)} aria-label="展开知识节点">
-          ‹ 知识节点
+          › 知识节点
         </button>
       )}
-      <aside className="side">
-        <button className="side-close" onClick={() => setSideOpen(false)} aria-label="收起">
-          收起 ›
-        </button>
-        <div className="mono">本课知识节点</div>
-        <h3>{LEARNABLE.length} 个节点</h3>
-        {LEARNABLE.map((n) => {
+      <aside className="side" aria-label="本课知识节点" aria-hidden={!sideOpen || exploring}>
+        <div className="lesson-directory-header">
+          <div><b>深度学习入门</b><span>{LEARNABLE.length} 个知识节点 · AlexNet</span></div>
+          <button className="side-close" onClick={() => setSideOpen(false)} aria-label="收起知识节点">‹</button>
+        </div>
+        {LEARNABLE.map((n, index) => {
           const p = get(progress, n.id);
           const st = status(p);
           return (
-            <button key={n.id} className={`side-node${current?.id === n.id ? " current" : ""}`} onClick={() => seek(n.span![0])}>
+            <button key={n.id} className={`side-node${current?.id === n.id ? " current" : ""}`} aria-current={current?.id === n.id ? "step" : undefined} onClick={() => seek(n.span![0])}>
               <div className="top">
+                <span className="node-number">{String(index + 1).padStart(2, "0")}</span>
                 <span className="name">{n.title}</span>
-                <span className={`status-chip status-${st}`}>{STATUS_LABEL[st]}</span>
               </div>
+              <img className="node-preview" src={nodePreview(n.id)} alt="" loading="lazy" />
+              <div className="node-caption"><span>{n.en}</span><span className={`status-chip status-${st}`}>{STATUS_LABEL[st]}</span></div>
               <div className="meter">
                 <div style={{ width: `${p.score * 100}%`, background: STATUS_COLOR[st] }} />
               </div>
@@ -343,6 +357,9 @@ export const LessonPage = ({ query }: { query: URLSearchParams }) => {
           <kbd>空格</kbd> 播放 / 暂停 &nbsp; <kbd>←</kbd> <kbd>→</kbd> ±5 秒 &nbsp; <kbd>E</kbd> 走进画面 &nbsp; <kbd>Esc</kbd> 退出
         </div>
       </aside>
+
+      <LessonChat node={current} onClose={() => setChatOpen(false)} hidden={!chatOpen || exploring} />
+      {!chatOpen && !exploring && <button className="chat-reopen" onClick={() => setChatOpen(true)} aria-label="展开 AI 助手">✦ AI 助手</button>}
 
       {quiz && (
         <div className="overlay">
