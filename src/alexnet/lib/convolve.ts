@@ -1,4 +1,4 @@
-/** Pure image math for the labs. Images are row-major grey arrays with values in 0..255. */
+/** Pure image math for the explore worlds. Images are row-major grey arrays with values in 0..255. */
 export type Kernel = number[][];
 export type Gray = { w: number; h: number; data: Float32Array };
 

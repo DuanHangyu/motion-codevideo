@@ -410,32 +410,6 @@ kbd {
   font-size: 13px;
   margin-left: 12px;
 }
-.node-label {
-  pointer-events: none;
-  transform: translateY(34px);
-  text-align: center;
-  white-space: nowrap;
-  transition: opacity 0.3s;
-}
-.node-label .t {
-  font-family: var(--font-title);
-  font-weight: 700;
-  font-size: 15px;
-  color: var(--ivory);
-  text-shadow: 0 2px 10px #000;
-}
-.node-label .e {
-  font-family: var(--font-mono);
-  font-size: 9px;
-  letter-spacing: 0.18em;
-  color: var(--dim);
-}
-.node-label.locked .t {
-  color: var(--faint);
-}
-.node-label.selected .t {
-  color: var(--cyan);
-}
 .map-stats div b small {
   font-size: 16px;
   color: var(--faint);
@@ -1048,7 +1022,7 @@ kbd {
   line-height: 2.1;
 }
 
-/* ── overlay layers: lab + quiz ─────────────────────────────────────── */
+/* ── overlay layer: quiz ─────────────────────────────────────── */
 .overlay {
   position: fixed;
   inset: 0;
@@ -1064,172 +1038,9 @@ kbd {
   }
 }
 
-.lab {
-  display: grid;
-  grid-template-rows: 70px minmax(0, 1fr);
-  height: 100vh;
-  overflow: hidden;
-}
-.lab-head {
-  display: flex;
-  align-items: center;
-  gap: 18px;
-  padding: 0 28px;
-  border-bottom: 1px solid var(--line);
-  background: rgba(4, 6, 12, 0.6);
-}
-.lab-head h2 {
-  font-family: var(--font-title);
-  font-size: 24px;
-  margin: 0;
-}
-.lab-head .mono {
-  color: var(--amber);
-}
-.lab-head .spacer {
-  flex: 1;
-}
-.lab-body {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 380px;
-  grid-template-rows: minmax(0, 1fr);
-  min-height: 0;
-}
-.lab-main {
-  position: relative;
-  min-height: 0;
-  min-width: 0;
-  display: grid;
-  place-items: center;
-  padding: 26px;
-  overflow: auto;
-}
-.lab-aside {
-  border-left: 1px solid var(--line);
-  padding: 24px 24px 30px;
-  overflow-y: auto;
-  background: rgba(8, 12, 22, 0.7);
-}
-.lab-aside h4 {
-  font-family: var(--font-mono);
-  font-weight: 500;
-  font-size: 12px;
-  letter-spacing: 0.18em;
-  color: var(--dim);
-  margin: 26px 0 12px;
-}
-.lab-aside h4:first-child {
-  margin-top: 0;
-}
-.try {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  counter-reset: t;
-}
-.try li {
-  counter-increment: t;
-  position: relative;
-  padding: 10px 12px 10px 40px;
-  margin-bottom: 8px;
-  border-radius: 10px;
-  background: rgba(255, 181, 71, 0.06);
-  border: 1px solid rgba(255, 181, 71, 0.18);
-  font-size: 14px;
-  line-height: 1.6;
-}
-.try li::before {
-  content: counter(t);
-  position: absolute;
-  left: 12px;
-  top: 10px;
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  background: var(--amber);
-  color: #1a0f00;
-  font-size: 11px;
-  font-weight: 700;
-  display: grid;
-  place-items: center;
-}
-.readout {
-  display: grid;
-  gap: 2px;
-  padding: 14px 16px;
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid var(--line);
-}
-.readout b {
-  font-family: var(--font-display);
-  font-size: 30px;
-  font-weight: 700;
-}
-.readout span {
-  font-size: 13px;
-  color: var(--dim);
-}
-.readouts {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-}
-.slider {
-  display: grid;
-  gap: 8px;
-  margin-bottom: 18px;
-}
-.slider label {
-  display: flex;
-  justify-content: space-between;
-  font-size: 14px;
-}
-.slider label b {
-  font-family: var(--font-mono);
-  color: var(--amber);
-  font-weight: 500;
-}
 input[type="range"] {
   width: 100%;
   accent-color: var(--amber);
-}
-.seg {
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-.seg button {
-  padding: 7px 12px;
-  border-radius: 8px;
-  border: 1px solid var(--line);
-  background: rgba(255, 255, 255, 0.02);
-  font-size: 13px;
-}
-.seg button:hover {
-  border-color: var(--line-strong);
-}
-.seg button.on {
-  border-color: var(--amber);
-  background: rgba(255, 181, 71, 0.14);
-  color: var(--amber);
-}
-.note {
-  font-size: 13px;
-  color: var(--dim);
-  line-height: 1.7;
-}
-.canvas-frame {
-  border-radius: 10px;
-  box-shadow: 0 0 0 1px var(--line);
-  display: block;
-}
-.cap {
-  font-family: var(--font-mono);
-  font-size: 12px;
-  letter-spacing: 0.14em;
-  color: var(--dim);
-  margin-top: 10px;
 }
 
 /* quiz */

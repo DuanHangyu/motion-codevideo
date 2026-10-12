@@ -2,7 +2,7 @@ import { loss } from "./loss";
 
 export type P = [number, number];
 export const BOUND = 7;
-/** Default drop point of the lab; the lab's learning-rate presets are pinned against it in descent.test.ts. */
+/** Default drop point in the descent world; its learning-rate presets are pinned against it in descent.test.ts. */
 export const START: P = [-5.5, 5];
 
 export const grad = ([x, z]: P): P => {
