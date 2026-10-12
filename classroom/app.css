@@ -1663,23 +1663,55 @@ select.kg-tool {
 }
 
 /* svg nodes and links */
+.kg-track {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.32em;
+  opacity: 0.55;
+  pointer-events: none;
+}
+.kg-track .zh {
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  opacity: 0.85;
+}
 .kg-link path {
   fill: none;
-  stroke: #b7c0cf;
+  stroke: var(--c);
+  stroke-opacity: 0.32;
   stroke-width: 1.4;
+  transition: stroke-opacity 0.25s, stroke-width 0.25s;
 }
 .kg-link.contains path {
-  stroke: #d5dbe6;
-  stroke-dasharray: 3 4;
+  stroke-opacity: 0.35;
+  stroke-dasharray: 2 5;
+  stroke-linecap: round;
+}
+.kg-link.lit path {
+  stroke-opacity: 0.95;
+  stroke-width: 2.2;
+  stroke-dasharray: 7 5;
+  animation: kg-flow 0.9s linear infinite;
+}
+@keyframes kg-flow {
+  to {
+    stroke-dashoffset: -12;
+  }
 }
 .kg-link text {
-  font-size: 13px;
-  fill: #8090a6;
+  font-size: calc(11.5px * var(--ls, 1));
+  font-weight: 500;
+  fill: #64748b;
   paint-order: stroke;
   stroke: #fbfcfe;
   stroke-width: 5px;
   stroke-linejoin: round;
   pointer-events: none;
+  animation: fade 0.25s both;
+}
+.kg-link.lit text {
+  fill: var(--c);
+  font-weight: 600;
 }
 .kg-link,
 .kg-node {
@@ -1688,24 +1720,43 @@ select.kg-tool {
 .kg-node {
   cursor: pointer;
 }
+.kg-node .in {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: kg-in 0.6s var(--ease-out) both;
+}
+@keyframes kg-in {
+  from {
+    opacity: 0;
+    scale: 0.4;
+  }
+}
 .kg-node .halo {
-  opacity: 0.32;
+  opacity: 0.3;
   transition: opacity 0.2s;
 }
 .kg-node.hover .halo,
 .kg-node.selected .halo {
-  opacity: 0.6;
+  opacity: 0.65;
 }
 .kg-node .body {
   transform-box: fill-box;
   transform-origin: center;
-  transition: transform 0.2s var(--ease-out);
+  transition: transform 0.25s var(--ease-out);
 }
 .kg-node.hover .body {
-  transform: scale(1.1);
+  transform: scale(1.15);
+}
+.kg-node .sel {
+  fill: none;
+  stroke-width: 2;
+  stroke-dasharray: 4 4;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: spin 8s linear infinite;
 }
 .kg-node .label {
-  font-size: 17px;
+  font-size: 14px;
   font-weight: 600;
   fill: #1e293b;
   paint-order: stroke;
@@ -1714,20 +1765,32 @@ select.kg-tool {
   stroke-linejoin: round;
   pointer-events: none;
 }
+.kg-node.open .label {
+  font-size: 17px;
+  font-weight: 700;
+  fill: #0f172a;
+}
 .kg-node.topic .label {
-  font-size: 14.5px;
+  font-size: 12.5px;
   font-weight: 500;
   fill: #334155;
 }
-.kg-node .label .count {
-  font-size: 13px;
-  font-weight: 600;
-  fill: #94a3b8;
+.kg-node.locked .label {
+  fill: #64748b;
 }
-.kg-node .label .soon {
+.kg-node .label .count {
   font-size: 11px;
-  font-weight: 400;
-  fill: #94a3b8;
+  font-weight: 600;
+  fill: #a3afc2;
+}
+.kg-node .badge {
+  font-size: 11px;
+  font-weight: 600;
+  fill: #2563eb;
+  paint-order: stroke;
+  stroke: #fbfcfe;
+  stroke-width: 4px;
+  pointer-events: none;
 }
 .kg-node .pulse {
   fill: none;
@@ -1743,7 +1806,7 @@ select.kg-tool {
   }
   to {
     opacity: 0;
-    scale: 1.9;
+    scale: 2;
   }
 }
 
@@ -1955,4 +2018,320 @@ select.kg-tool {
     opacity: 0;
     transform: translateY(10px);
   }
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   Light lesson page. The video itself stays as rendered (dark); everything
+   around it — bars, timeline, side panel, cards — uses the light palette.
+   ═══════════════════════════════════════════════════════════════════ */
+.lt-lesson {
+  --bg: #f6f8fc;
+  --panel: #ffffff;
+  --panel-solid: #ffffff;
+  --line: #e5e9f2;
+  --line-strong: #cbd5e1;
+  --ivory: #0f172a;
+  --dim: #64748b;
+  --faint: #94a3b8;
+  --cyan: #2563eb;
+  --amber: #d97706;
+  --coral: #e11d48;
+  --violet: #7c3aed;
+  --lime: #16a34a;
+  --font-title: "PingFang SC", "Hiragino Sans GB", "Inter", -apple-system, sans-serif;
+  --font-cn: "PingFang SC", "Hiragino Sans GB", -apple-system, sans-serif;
+  background:
+    radial-gradient(1000px 380px at 40% -120px, #e8efff 0%, rgba(232, 239, 255, 0) 70%),
+    var(--bg);
+  color: var(--ivory);
+  font-family: var(--font-cn);
+}
+.lt-lesson ~ .grain {
+  display: none;
+}
+.lt-lesson button:focus-visible {
+  outline-color: #2563eb;
+}
+
+/* top bar */
+.lt-lesson .topbar {
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--line);
+}
+.lt-lesson .brand {
+  font-family: "Inter", "SF Pro Display", -apple-system, sans-serif;
+  font-weight: 700;
+  font-size: 16px;
+  letter-spacing: 0;
+  color: #0f172a;
+}
+.lt-lesson .brand span {
+  color: #64748b;
+  font-weight: 500;
+}
+.lt-lesson .topbar .mono {
+  color: #64748b;
+  letter-spacing: 0.08em;
+}
+
+/* buttons */
+.lt-lesson .btn {
+  border-radius: 10px;
+  border-color: var(--line);
+  background: #fff;
+  color: #0f172a;
+  font-weight: 500;
+}
+.lt-lesson .btn:hover {
+  background: #f8fafc;
+  border-color: var(--line-strong);
+}
+.lt-lesson .btn.primary {
+  background: #2563eb;
+  border-color: #2563eb;
+  color: #fff;
+  box-shadow: 0 6px 18px rgba(37, 99, 235, 0.3);
+}
+.lt-lesson .btn.primary:hover {
+  background: #1d4ed8;
+}
+.lt-lesson .btn.amber {
+  background: #f59e0b;
+  border-color: #f59e0b;
+  color: #fff;
+  box-shadow: 0 6px 18px rgba(245, 158, 11, 0.35);
+}
+.lt-lesson .btn.ghost {
+  background: transparent;
+  border-color: transparent;
+  color: var(--dim);
+}
+.lt-lesson .btn.ghost:hover {
+  background: #eef2f7;
+  color: #0f172a;
+}
+.lt-lesson .panel {
+  background: #fff;
+  border-color: var(--line);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 18px 50px rgba(15, 23, 42, 0.14);
+}
+
+/* the video frame */
+.lt-lesson .stage {
+  box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.06), 0 24px 60px rgba(15, 23, 42, 0.18);
+}
+.lt-lesson .stage.in-zone.paused,
+.lt-lesson .stage.is-world.paused {
+  box-shadow: 0 0 0 2px #f59e0b, 0 0 50px rgba(245, 158, 11, 0.25), 0 24px 60px rgba(15, 23, 42, 0.18);
+}
+/* overlays that sit on the dark video keep light-on-dark text */
+.lt-lesson .start-cover h2 {
+  color: #f1f5f9;
+}
+.lt-lesson .start-cover p {
+  color: rgba(241, 245, 249, 0.7);
+}
+.lt-lesson .start-cover .mono {
+  color: #fbbf24 !important;
+}
+.lt-lesson .pause-tag {
+  color: rgba(241, 245, 249, 0.85);
+  background: rgba(15, 23, 42, 0.6);
+  border-color: rgba(255, 255, 255, 0.14);
+  backdrop-filter: blur(6px);
+}
+.lt-lesson .resume-bar .btn.ghost {
+  background: rgba(15, 23, 42, 0.6);
+  color: rgba(241, 245, 249, 0.85);
+  backdrop-filter: blur(6px);
+}
+.lt-lesson .resume-bar .btn.ghost kbd {
+  color: rgba(241, 245, 249, 0.7);
+  border-color: rgba(255, 255, 255, 0.25);
+}
+.lt-lesson .explore-cta.world {
+  border-color: rgba(245, 158, 11, 0.5);
+  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.18), 0 18px 50px rgba(15, 23, 42, 0.3);
+}
+.lt-lesson .explore-cta .txt b {
+  color: #b45309;
+}
+
+/* transport */
+.lt-lesson .play {
+  background: #2563eb;
+  border-color: #2563eb;
+  box-shadow: 0 6px 18px rgba(37, 99, 235, 0.3);
+}
+.lt-lesson .play:hover {
+  background: #1d4ed8;
+  border-color: #1d4ed8;
+}
+.lt-lesson .icon-play {
+  border-left-color: #fff;
+}
+.lt-lesson .icon-pause {
+  border-left-color: #fff;
+  border-right-color: #fff;
+}
+.lt-lesson .clock {
+  color: #0f172a;
+}
+.lt-lesson .tl-chapter {
+  background: #e2e8f0;
+}
+.lt-lesson .tl-chapter > div {
+  background: #93a4bd;
+}
+.lt-lesson .tl-chapter.current > div {
+  background: #2563eb;
+}
+.lt-lesson .tl-zone {
+  border-color: rgba(245, 158, 11, 0.55);
+  background: rgba(245, 158, 11, 0.1);
+}
+.lt-lesson .tl-zone.tl-world {
+  border-color: #f59e0b;
+  background: linear-gradient(90deg, rgba(245, 158, 11, 0.3), rgba(245, 158, 11, 0.12));
+  box-shadow: none;
+}
+.lt-lesson .tl-cp {
+  background: #fff;
+}
+.lt-lesson .tl-cp.done {
+  background: var(--violet);
+}
+.lt-lesson .tl-head {
+  background: #0f172a;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.9);
+}
+.lt-lesson .tl-guess {
+  box-shadow: 0 0 0 2px #fff;
+}
+
+/* side panel */
+.lt-lesson .side {
+  background: rgba(255, 255, 255, 0.72);
+  border-left-color: var(--line);
+}
+.lt-lesson .side h3 {
+  font-weight: 700;
+}
+.lt-lesson .side-node {
+  background: #fff;
+  border-color: var(--line);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03);
+}
+.lt-lesson .side-node:hover {
+  background: #f8fafc;
+  border-color: var(--line-strong);
+}
+.lt-lesson .side-node.current {
+  background: #eff4ff;
+  border-color: #93b4ff;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.08);
+}
+.lt-lesson .side-node .name {
+  font-weight: 500;
+}
+.lt-lesson .meter {
+  background: #eef2f7;
+}
+.lt-lesson .side-open {
+  background: #fff;
+  box-shadow: 0 6px 20px rgba(15, 23, 42, 0.1);
+}
+.lt-lesson .status-new {
+  color: #94a3b8;
+}
+
+/* quiz */
+.lt-lesson .overlay {
+  background: rgba(15, 23, 42, 0.38);
+  backdrop-filter: blur(8px);
+}
+.lt-lesson .quiz h3,
+.lt-lesson .predict h3 {
+  font-weight: 700;
+  color: #0f172a;
+}
+.lt-lesson .quiz-dots i {
+  background: #e2e8f0;
+}
+.lt-lesson .quiz-dots i.now {
+  background: #0f172a;
+}
+.lt-lesson .opt {
+  background: #fff;
+  border-color: var(--line);
+}
+.lt-lesson .opt:hover:not(:disabled) {
+  background: #f8fafc;
+  border-color: #bcd0ff;
+}
+.lt-lesson .opt.right {
+  background: #f0fdf4;
+  border-color: #22c55e;
+}
+.lt-lesson .opt.wrong {
+  background: #fff1f2;
+  border-color: #f43f5e;
+}
+.lt-lesson .explain.ok {
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+}
+.lt-lesson .explain.no {
+  background: #fff1f2;
+  border-color: #fecdd3;
+}
+.lt-lesson .quiz .kernel-fig div {
+  background: #fef3c7;
+  color: #b45309;
+}
+.lt-lesson .summary .big {
+  color: #16a34a;
+}
+.lt-lesson .summary-nodes div {
+  background: #f8fafc;
+}
+
+/* guess first, then watch — light cards over the video */
+.lt-lesson .predict {
+  background: rgba(255, 255, 255, 0.96);
+  border-color: #bfdbfe;
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.08), 0 24px 60px rgba(15, 23, 42, 0.35);
+}
+.lt-lesson .predict-opts button {
+  background: #f8fafc;
+  border-color: var(--line);
+  color: #0f172a;
+}
+.lt-lesson .predict-opts button:hover {
+  background: #eff4ff;
+  border-color: #93b4ff;
+}
+.lt-lesson .predict-chip {
+  color: #334155;
+  background: rgba(255, 255, 255, 0.95);
+  border-color: #bfdbfe;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.25);
+}
+.lt-lesson .predict-chip b {
+  color: #0f172a;
+}
+.lt-lesson .predict-chip.right {
+  color: #fff;
+  background: #16a34a;
+  border-color: #16a34a;
+  box-shadow: 0 8px 24px rgba(22, 163, 74, 0.4);
+}
+.lt-lesson .predict-chip.right b {
+  color: #fff;
+}
+.lt-lesson .predict-chip.wrong {
+  color: #9f1239;
+  background: #fff1f2;
+  border-color: #fda4af;
 }

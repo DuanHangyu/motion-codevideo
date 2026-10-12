@@ -9,7 +9,7 @@ import { go } from "../router";
 import { useProgress, progress as store } from "../progress/store";
 import { STATUS_LABEL, get, status } from "../progress/mastery";
 import { LEARNABLE, TOPIC, nodeAt, nodeById, watchedAt } from "../map/graph";
-import { STATUS_COLOR } from "../map/status";
+import { STATUS_COLOR_LIGHT as STATUS_COLOR } from "../map/status";
 import { QuizSession } from "../quiz/QuizSession";
 import { CHECKPOINTS, Checkpoint, PREDICTIONS, Prediction, crossed, steppedOver } from "./zones";
 import { LessonTimeline } from "./LessonTimeline";
@@ -205,7 +205,7 @@ export const LessonPage = ({ query }: { query: URLSearchParams }) => {
   const completedWorlds = WORLDS.filter((w) => explore.isCompleted(w.id)).length;
 
   return (
-    <main className={`lesson${exploring ? " exploring" : ""}${sideOpen ? "" : " side-closed"}`}>
+    <main className={`lesson lt-lesson${exploring ? " exploring" : ""}${sideOpen ? "" : " side-closed"}`}>
       <header className="topbar">
         <button className="brand" onClick={() => go("/")}>
           PolyPilot<span> Learning</span>
@@ -327,7 +327,7 @@ export const LessonPage = ({ query }: { query: URLSearchParams }) => {
         })}
         <div className="side-legend">
           <div>
-            <i style={{ background: "rgba(255,181,71,0.35)", border: "1px solid var(--amber)" }} />
+            <i style={{ background: "rgba(245,158,11,0.18)", border: "1px solid var(--amber)" }} />
             可走进的画面 · 挑战 {completedWorlds}/{WORLDS.length}
           </div>
           <div>

@@ -27,7 +27,7 @@ const Overview = ({ progress, onPick }: { progress: Progress; onPick: (id: strin
     <>
       <div className="kg-kicker">课程概览</div>
       <h2>{TOPIC.title}</h2>
-      <p className="kg-desc">从 AlexNet 出发，沿视觉、序列、生成三条主线走到今天的大模型。点击大节点展开它的知识点，箭头上写着节点之间的关系。</p>
+      <p className="kg-desc">从感知机和反向传播出发，沿视觉、序列、生成、强化学习几条主线走到今天的大模型。鼠标悬停看节点之间的关系，点击大节点展开它的知识点。</p>
       <div className="kg-stats">
         <div>
           <b>{CHAPTERS.length}</b>大节点
@@ -46,7 +46,7 @@ const Overview = ({ progress, onPick }: { progress: Progress; onPick: (id: strin
           <b>{Math.round(avg * 100)}%</b>掌握度
         </div>
       </div>
-      <div className="kg-sub">三条主线</div>
+      <div className="kg-sub">{Object.keys(TRACKS).length} 条主线</div>
       <div className="kg-tracks">
         {(Object.keys(TRACKS) as TrackId[]).map((t) => (
           <div key={t}>
@@ -281,7 +281,7 @@ export const MapPage = () => {
                 {query && <span className="hits">{searchHits} 个结果</span>}
               </label>
               <div className="kg-filter">
-                <button className={`kg-tool${filterOpen || openOnly || tracks.size < 3 ? " on" : ""}`} onClick={() => setFilterOpen((o) => !o)}>
+                <button className={`kg-tool${filterOpen || openOnly || tracks.size < Object.keys(TRACKS).length ? " on" : ""}`} onClick={() => setFilterOpen((o) => !o)}>
                   {Icon.filter} 筛选
                 </button>
                 {filterOpen && (
@@ -341,7 +341,7 @@ export const MapPage = () => {
                   {STATUS_LABEL[s]}
                 </span>
               ))}
-              <span className="hint">拖动画布平移 · 滚轮缩放 · 拖动节点重新摆放</span>
+              <span className="hint">悬停看关系 · 拖动画布平移 · 滚轮缩放 · 拖动节点重新摆放</span>
             </div>
           </section>
 
